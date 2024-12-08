@@ -1,0 +1,11 @@
+dev:
+    driver: mysql
+    open: xxx:xxx@tcp(127.0.0.1:3306)/DBNAME?parseTime=true
+
+prod:
+    driver: mysql
+    open: xxx:xxx@tcp(127.0.0.1:3306)/DBNAME?parseTime=true
+
+test:
+    driver: mysql
+    open: xxx:xxx@tcp(127.0.0.1:3306)/DBNAME?parseTime=true
