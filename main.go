@@ -22,18 +22,9 @@ func main() {
 	flag.Parse()
 
 	switch *mode {
-	// request-respond pattern
-	case "server":
+	case "server": // request-respond pattern
 		runServer()
-	case "webhook":
-		runCallback()
-	// batch pattern
-	case "cron":
-		runCron()
-	case "batch":
-		runBatch()
-	// event-driven pattern
-	case "event", "stream":
+	case "event", "stream": // event-driven pattern, mainly for web crawler
 		runWorker()
 	default:
 		log.Fatal("Unknown mode")
@@ -46,18 +37,6 @@ func runServer() {
 
 	server.SetupRoutes()
 	log.Fatal(http.ListenAndServe(port, nil))
-}
-
-func runCallback() {
-	// webhook.Run()
-}
-
-func runCron() {
-	// cron.Run()
-}
-
-func runBatch() {
-	// batch.Run()
 }
 
 func runWorker() {
