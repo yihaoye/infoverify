@@ -4,5 +4,5 @@
 * 详细数据支持
 
 ## Milestone
-* [] Article
-* [] Video
+* [ ] Article
+* [ ] Audio / Video
