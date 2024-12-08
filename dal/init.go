@@ -8,5 +8,5 @@ func Init() {
 }
 
 func Stop() {
-	// client.Close()
+	// xxx.Close()
 }
