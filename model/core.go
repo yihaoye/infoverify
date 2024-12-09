@@ -1,10 +1,11 @@
 package model
 
-type Conclusion struct {
-	ID       string `json:"id"`
-	TargetID string `json:"target_id"`
+type TextConclusion struct {
+	ID     string `json:"id"`
+	TextID string `json:"text_id"`
 
-	Explain               string  `json:"explain"`
+	Explain string `json:"explain"`
+	// Compare               string  `json:"compare"` // how avg, top10 etc looks like
 	CrossValidationScore  float64 `json:"cross_validation_score"`
 	CrossValidationWeight float64 `json:"cross_validation_weight"`
 	DIWKScore             float64 `json:"dikw_score"`
@@ -16,7 +17,7 @@ type Conclusion struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
-func (c *Conclusion) SumScore() float64 {
+func (c *TextConclusion) SumScore() float64 {
 	res := 0.0
 	res += c.CrossValidationScore * c.CrossValidationWeight
 	res += c.DIWKScore * c.DIWKWeight
@@ -24,14 +25,18 @@ func (c *Conclusion) SumScore() float64 {
 	return res
 }
 
-type EventType int
+type Text struct {
+	ID        string       `json:"id"`
+	Source    TargetSource `json:"source"`
+	Language  string       `json:"language"`
+	Content   string       `json:"content"` // or Data
+	ViewCount int64        `json:"view_count"`
+}
+
+type TargetSource int
 
 const (
-	Unknown EventType = 0
-	Create  EventType = 1
-	Update  EventType = 2
+	SourceUnknown     TargetSource = 0
+	SourceURL         TargetSource = 1
+	SourceDirectInput TargetSource = 2
 )
-
-type Event struct {
-	Type EventType `json:"type"`
-}
