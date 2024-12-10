@@ -17,20 +17,24 @@ func HandleCheckRequest(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	// body has json field "content"
-	var payload map[string]string
+	var payload map[string]map[string]string
 	err = json.Unmarshal(body, &payload)
 	if err != nil {
 		http.Error(w, "Failed to unmarshal request body", http.StatusInternalServerError)
 		return
 	}
 
-	title := payload["title"]
-	author := payload["author"]
-	content := payload["content"]
+	article := payload["article"]
+	if article == nil {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	title, author, content := article["title"], article["author"], article["content"]
 	if title == "" || author == "" || content == "" {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
+
 	res, err := target.CreateArticle(ctx, title, author, content)
 	if err != nil {
 		http.Error(w, "Failed to create article", http.StatusInternalServerError)
