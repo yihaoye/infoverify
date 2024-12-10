@@ -1,68 +1,181 @@
 package semantics_search
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
-	"log"
 	"strings"
-	"time"
 
 	"github.com/elastic/go-elasticsearch/v8"
 )
 
-// ES
-func Demo() {
-	// Create a client to interact with Elasticsearch
-	es, err := elasticsearch.NewClient(elasticsearch.Config{
+// Article represents the structure of an article document
+type Article struct {
+	ID      string `json:"id"`
+	Title   string `json:"title"`
+	Content string `json:"content"`
+	Author  string `json:"author"`
+}
+
+// ESClient wraps the Elasticsearch client
+type ESClient struct {
+	client *elasticsearch.Client
+	index  string
+}
+
+var (
+	ArticleESClient *ESClient
+)
+
+// NewESClient creates a new Elasticsearch client
+func Init() error {
+	client, err := elasticsearch.NewClient(elasticsearch.Config{
 		Addresses: []string{"http://localhost:9200"},
 	})
 	if err != nil {
-		log.Fatalf("Error creating the client: %s", err)
+		return fmt.Errorf("failed to create ES client: %w", err)
 	}
 
-	// Index a document
-	document := `{
-		"title": "Elasticsearch in Go",
-		"content": "This is a sample document indexed with Go."
-	}`
-	_, err = es.Index(
-		"articles", // Index name
-		strings.NewReader(document),
-		es.Index.WithDocumentID("1"), // Optionally specify a document ID
-		es.Index.WithRefresh("true"), // Refresh after indexing
-	)
+	ArticleESClient = &ESClient{
+		client: client,
+		index:  "articles",
+	}
+	return nil
+}
 
-	// Handle errors during indexing
+// IndexArticle indexes a single article. When "index" an article, we're essentially storing and making it searchable in Elasticsearch.
+func (ec *ESClient) IndexArticle(article Article) error {
+	articleJSON, err := json.Marshal(article)
 	if err != nil {
-		log.Fatalf("Error indexing document: %s", err)
+		return fmt.Errorf("failed to marshal article: %w", err)
 	}
-	fmt.Println("Document indexed successfully!")
 
-	// Wait a moment for the index to be ready
-	time.Sleep(2 * time.Second)
-
-	// Search for the indexed document
-	searchResponse, err := es.Search(
-		es.Search.WithIndex("articles"),
-		es.Search.WithQuery(`{"match": {"content": "Go"}}`), // Match query
-		es.Search.WithSize(10),                              // Number of results
+	_, err = ec.client.Index(
+		ec.index,
+		strings.NewReader(string(articleJSON)),
+		ec.client.Index.WithDocumentID(article.ID),
+		ec.client.Index.WithRefresh("true"),
 	)
-
 	if err != nil {
-		log.Fatalf("Error searching documents: %s", err)
-	}
-	defer searchResponse.Body.Close()
-
-	// Print the search results
-	fmt.Println("Search results:")
-	var response map[string]interface{}
-	if err := json.NewDecoder(searchResponse.Body).Decode(&response); err != nil {
-		log.Fatalf("Error parsing the response body: %s", err)
+		return fmt.Errorf("failed to index article: %w", err)
 	}
 
-	// Output the search hits
-	hits := response["hits"].(map[string]interface{})["hits"].([]interface{})
+	return nil
+}
+
+// BulkIndexArticles indexes multiple articles in bulk
+func (ec *ESClient) BulkIndexArticles(articles []Article) error {
+	if len(articles) == 0 {
+		return errors.New("no articles to index")
+	}
+
+	var builder strings.Builder
+	for _, article := range articles {
+		// Add metadata
+		metadata := map[string]interface{}{
+			"index": map[string]interface{}{
+				"_index": ec.index,
+				"_id":    article.ID,
+			},
+		}
+		metadataJSON, err := json.Marshal(metadata)
+		if err != nil {
+			return fmt.Errorf("failed to marshal metadata: %w", err)
+		}
+		builder.Write(metadataJSON)
+		builder.WriteString("\n")
+
+		// Add document
+		articleJSON, err := json.Marshal(article)
+		if err != nil {
+			return fmt.Errorf("failed to marshal article: %w", err)
+		}
+		builder.Write(articleJSON)
+		builder.WriteString("\n")
+	}
+
+	// Perform bulk indexing
+	res, err := ec.client.Bulk(strings.NewReader(builder.String()))
+	if err != nil {
+		return fmt.Errorf("failed to perform bulk indexing: %w", err)
+	}
+	defer res.Body.Close()
+
+	if res.IsError() {
+		return fmt.Errorf("bulk indexing failed: %s", res.String())
+	}
+
+	return nil
+}
+
+// SearchArticles searches for articles based on query []string
+func (ec *ESClient) SearchArticles(query []string, size int) ([]Article, error) {
+	// Construct the search query
+	searchQuery := map[string]interface{}{
+		"query": map[string]interface{}{
+			"multi_match": map[string]interface{}{
+				"query":  strings.Join(query, " "),
+				"fields": []string{"title^2", "content", "author"}, // title has higher weight
+			},
+		},
+	}
+
+	searchJSON, err := json.Marshal(searchQuery)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal search query: %w", err)
+	}
+
+	// Perform the search
+	res, err := ec.client.Search(
+		ec.client.Search.WithContext(context.Background()),
+		ec.client.Search.WithIndex(ec.index),
+		ec.client.Search.WithBody(strings.NewReader(string(searchJSON))),
+		ec.client.Search.WithSize(size),
+	)
+	if err != nil {
+		return nil, fmt.Errorf("search failed: %w", err)
+	}
+	defer res.Body.Close()
+
+	// Parse the response
+	var result map[string]interface{}
+	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	// Extract hits
+	hits := result["hits"].(map[string]interface{})["hits"].([]interface{})
+	articles := make([]Article, 0, len(hits))
+
 	for _, hit := range hits {
-		fmt.Printf("%v\n", hit)
+		source := hit.(map[string]interface{})["_source"]
+		articleJSON, err := json.Marshal(source)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal hit source: %w", err)
+		}
+
+		var article Article
+		if err := json.Unmarshal(articleJSON, &article); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal article: %w", err)
+		}
+		articles = append(articles, article)
 	}
+
+	return articles, nil
+}
+
+// DeleteArticle deletes an article by ID
+func (ec *ESClient) DeleteArticle(id string) error {
+	res, err := ec.client.Delete(ec.index, id)
+	if err != nil {
+		return fmt.Errorf("failed to delete article: %w", err)
+	}
+	defer res.Body.Close()
+
+	if res.IsError() {
+		return fmt.Errorf("delete operation failed: %s", res.String())
+	}
+
+	return nil
 }
