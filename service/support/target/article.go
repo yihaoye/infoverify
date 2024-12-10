@@ -8,7 +8,7 @@ import (
 	"github.com/yihaoye/infoverify/dal/semantics_search"
 )
 
-func CreateArticle(ctx context.Context, title, content, author string) (string, error) {
+func CreateArticle(ctx context.Context, title, author, content string) (string, error) {
 	esClient := semantics_search.ArticleESClient
 
 	// Index a single article
@@ -25,6 +25,14 @@ func CreateArticle(ctx context.Context, title, content, author string) (string, 
 	}
 
 	return article.ID, nil
+}
+
+func GetArticle(ctx context.Context, id string) (string, error) {
+	article, err := semantics_search.ArticleESClient.GetArticle(id)
+	if err != nil {
+		return "", err
+	}
+	return article.Content, nil
 }
 
 func SearchArticle(ctx context.Context, query []string, size int) string {

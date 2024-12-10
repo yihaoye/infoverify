@@ -43,3 +43,28 @@ func HandleCheckRequest(w http.ResponseWriter, r *http.Request) {
 func HandleAdvancedCheckRequest(w http.ResponseWriter, r *http.Request) {
 	HandleCheckRequest(w, r)
 }
+
+func HandleReviewRequest(w http.ResponseWriter, r *http.Request) {
+	// get article content by url id
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		http.Error(w, "Invalid request body", http.StatusBadRequest)
+		return
+	}
+	ctx := r.Context()
+	article, err := target.GetArticle(ctx, id)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Failed to get article: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	// Convert article to JSON for better visibility
+	response, err := json.Marshal(article)
+	if err != nil {
+		http.Error(w, "Failed to marshal article", http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(response)
+}

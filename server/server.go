@@ -9,6 +9,6 @@ import (
 func SetupRoutes() {
 
 	http.HandleFunc("/api/basic/check", LoggingMiddleware(handler.HandleCheckRequest))
-
+	http.HandleFunc("/api/basic/get", LoggingMiddleware(handler.HandleReviewRequest))
 	// http.HandleFunc("/api/advanced/check/", AuthenticateMiddleware(handler.HandleAdvancedCheckRequest))
 }

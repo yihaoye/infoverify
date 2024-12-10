@@ -109,8 +109,32 @@ func (ec *ESClient) BulkIndexArticles(articles []Article) error {
 	return nil
 }
 
+// GetArticle get the article by ID
+func (ec *ESClient) GetArticle(id string) (*Article, error) {
+	res, err := ec.client.Get(ec.index, id)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get article: %w", err)
+	}
+	defer res.Body.Close()
+
+	// Add response status check
+	if res.IsError() {
+		return nil, fmt.Errorf("error getting document ID %s: %s", id, res.String())
+	}
+
+	// Parse the response correctly
+	var result struct {
+		Source Article `json:"_source"`
+	}
+	if err := json.NewDecoder(res.Body).Decode(&result); err != nil {
+		return nil, fmt.Errorf("failed to parse response: %w", err)
+	}
+
+	return &result.Source, nil
+}
+
 // SearchArticles searches for articles based on query []string
-func (ec *ESClient) SearchArticles(query []string, size int) ([]Article, error) {
+func (ec *ESClient) SearchArticles(query []string, size int) ([]*Article, error) {
 	// Construct the search query
 	searchQuery := map[string]interface{}{
 		"query": map[string]interface{}{
@@ -146,7 +170,7 @@ func (ec *ESClient) SearchArticles(query []string, size int) ([]Article, error) 
 
 	// Extract hits
 	hits := result["hits"].(map[string]interface{})["hits"].([]interface{})
-	articles := make([]Article, 0, len(hits))
+	articles := make([]*Article, 0, len(hits))
 
 	for _, hit := range hits {
 		source := hit.(map[string]interface{})["_source"]
@@ -159,7 +183,7 @@ func (ec *ESClient) SearchArticles(query []string, size int) ([]Article, error) 
 		if err := json.Unmarshal(articleJSON, &article); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal article: %w", err)
 		}
-		articles = append(articles, article)
+		articles = append(articles, &article)
 	}
 
 	return articles, nil
