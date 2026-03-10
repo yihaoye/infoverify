@@ -23,6 +23,27 @@
 ## 停止
 `docker-compose down`
 
+## 迁移
+最小表结构脚本：
+`internal/dal/postgres/migrations/20260310_0900_create_articles_reports.sql`
+
+当前完整表结构：
+`internal/dal/postgres/schema.sql`
+
+生成/更新 schema 文件（需安装 `pg_dump`）：
+```bash
+./scripts/gen_schema.sh
+```
+
+快速应用（本地默认配置）：
+```bash
+psql "postgres://postgres:postgres@localhost:5432/infoverify?sslmode=disable" -f internal/dal/postgres/migrations/20260310_0900_create_articles_reports.sql
+```
+
+## 数据库
+默认使用 Postgres（`DATABASE_URL` 可覆盖）：
+`postgres://postgres:postgres@localhost:5432/infoverify?sslmode=disable`
+
 ## API
 提交 URL 进入爬取队列：
 ```bash

@@ -18,6 +18,7 @@
 - **任务队列（Redis）**：只负责 URL 任务入队与 Worker 消费。
 - **动态查询（可选）**：仅在本地数据不足时触发（后续扩展）。
 - **搜索能力（Postgres）**：通过 `tsvector + GIN` 实现全文检索，`pg_trgm` 支持相似度匹配。
+- **Agent 调度（MVP 轻量版）**：固定流程 + Skills 调度，保证可解释与可控。
 
 说明：MVP 阶段不引入 Cache 层，不强制使用 Elasticsearch。若后续遇到检索质量或性能瓶颈，再引入 ES/向量检索与缓存。
 
@@ -29,12 +30,11 @@
 - [x] **阶段 2：异步任务与队列**
   - 说明：Server 入队、Worker 消费并抓取内容。
 
-- [ ] **阶段 3：数据持久化（Postgres）**
+- [x] **阶段 3：数据持久化（Postgres）**
   - 目标：落地最小数据模型与迁移脚本。
   - 内容：
-    - `articles`（url、title、author、content、hash、tsvector）
-    - `tasks`（url、status、error、created_at、updated_at）
-    - `sources`（domain、可信度统计字段，先预留）
+    - `articles`（url、title、author、content）
+    - `reports`（article_id、report JSON）
 
 - [ ] **阶段 4：基础检索与查询**
   - 目标：在 Postgres 中完成全文检索与相似度检索。
@@ -45,6 +45,7 @@
 - [ ] **阶段 5：基础分析引擎（轻量版）**
   - 目标：先做低成本规则与结构化分析。
   - 内容：
+    - 固定流程输出 + Skills 评分与证据结构
     - 内容结构分析（标题/作者/发布时间/引用数量/段落结构）
     - 初步的内部一致性检查（字段缺失/异常）
 
@@ -53,4 +54,4 @@
   - 内容：
     - ES 或向量检索
     - NLP/NLI 模型
-    - 更完整的交叉验证流程
+    - 更完整的交叉验证流程（动态调度）
