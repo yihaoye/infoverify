@@ -1,0 +1,82 @@
+[
+  {
+    "domain": "physics",
+    "title": "On the Electrodynamics of Moving Bodies",
+    "author": "Albert Einstein",
+    "year": 1905,
+    "note": "Special relativity foundational paper",
+    "url": "https://doi.org/10.1002/andp.19053221004"
+  },
+  {
+    "domain": "physics",
+    "title": "The Principles of Quantum Mechanics",
+    "author": "P. A. M. Dirac",
+    "year": 1930,
+    "note": "Canonical quantum mechanics text",
+    "url": "https://www.cambridge.org/9781108000727"
+  },
+  {
+    "domain": "mathematics",
+    "title": "On Formally Undecidable Propositions of Principia Mathematica and Related Systems",
+    "author": "Kurt Gödel",
+    "year": 1931,
+    "note": "Gödel incompleteness theorem",
+    "url": "https://doi.org/10.2307/2370817"
+  },
+  {
+    "domain": "mathematics",
+    "title": "Grundlagen der Geometrie",
+    "author": "David Hilbert",
+    "year": 1899,
+    "note": "Foundations of geometry",
+    "url": "https://archive.org/details/grundlagendergeo00hilb"
+  },
+  {
+    "domain": "chemistry",
+    "title": "The Nature of the Chemical Bond",
+    "author": "Linus Pauling",
+    "year": 1939,
+    "note": "Foundational chemical bonding text",
+    "url": "https://www.cornellpress.cornell.edu/book/9780801403330/"
+  },
+  {
+    "domain": "chemistry",
+    "title": "The Structure of the Benzene Molecule",
+    "author": "August Kekulé",
+    "year": 1865,
+    "note": "Benzene ring structure concept",
+    "url": "https://doi.org/10.1002/andp.18651490202"
+  },
+  {
+    "domain": "medicine",
+    "title": "On the Antiseptic Principle in the Practice of Surgery",
+    "author": "Joseph Lister",
+    "year": 1867,
+    "note": "Foundational antisepsis",
+    "url": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2102147/"
+  },
+  {
+    "domain": "medicine",
+    "title": "The Controlled Trial",
+    "author": "A. Bradford Hill",
+    "year": 1951,
+    "note": "Foundational clinical trial methodology",
+    "url": "https://doi.org/10.1136/bmj.1.4727.1171"
+  },
+  {
+    "domain": "biology",
+    "title": "Molecular Structure of Nucleic Acids",
+    "author": "J. D. Watson, F. H. C. Crick",
+    "year": 1953,
+    "note": "DNA double helix",
+    "url": "https://doi.org/10.1038/171737a0"
+  },
+  {
+    "domain": "biology",
+    "title": "On the Origin of Species",
+    "author": "Charles Darwin",
+    "year": 1859,
+    "note": "Evolution by natural selection",
+    "url": "https://www.gutenberg.org/ebooks/2009"
+  }
+]

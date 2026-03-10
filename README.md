@@ -44,14 +44,14 @@ psql "postgres://postgres:postgres@localhost:5432/infoverify?sslmode=disable" -f
 默认使用 Postgres（`DATABASE_URL` 可覆盖）：
 `postgres://postgres:postgres@localhost:5432/infoverify?sslmode=disable`
 
-## OpenAI
+## Gemini
 LLM 作为总控调度器（需要配置 key）：
 ```bash
-export OPENAI_API_KEY="your_key"
-export OPENAI_MODEL="gpt-4o-mini"
-export OPENAI_BASE_URL="https://api.openai.com/v1"
+export GEMINI_API_KEY="your_key"
+export GEMINI_MODEL="gemini-2.5-flash"
+export GEMINI_BASE_URL="https://generativelanguage.googleapis.com/v1beta"
 ```
-未配置 `OPENAI_API_KEY` 时，分析会返回错误。
+未配置 `GEMINI_API_KEY` 时，分析会返回错误。
 
 ## 交叉验证模式
 默认只使用本地检索，不触发网络抓取：
@@ -70,6 +70,26 @@ export SEARCH_API_URL="https://your-search-provider/api"
 export SEARCH_API_KEY="your_key"
 ```
 外部抓取会受 allowlist 限制（见 `internal/service/support/external/allowlist.go`）。
+
+默认提供权威源搜索工具：
+- UN（`search_un`）
+- World Bank（`search_worldbank`）
+- WHO（`search_who`）
+- IMF（`search_imf`）
+- FAO（`search_fao`）
+- OECD（`search_oecd`）
+- Wikipedia（`search_wikipedia`）
+- OpenAlex（`search_openalex`）
+- Crossref（`search_crossref`）
+- Semantic Scholar（`search_semanticscholar`）
+- Canonical refs（`canonical_refs`，物理/数学/化学/医学/生物）
+
+学术检索可选配置：
+```bash
+export OPENALEX_API_KEY="optional_key"
+export CROSSREF_MAILTO="you@example.com"
+export SEMANTIC_SCHOLAR_API_KEY="optional_key"
+```
 
 ## API
 提交 URL 进入爬取队列：

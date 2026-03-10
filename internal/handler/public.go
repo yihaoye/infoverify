@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/yihaoye/infoverify/internal/service/core/skill"
 	"github.com/yihaoye/infoverify/internal/service/support/search"
 	"github.com/yihaoye/infoverify/internal/service/support/target"
 )
@@ -63,11 +64,13 @@ func HandleCheckRequest(w http.ResponseWriter, r *http.Request) {
 
 	article, _ := target.GetArticle(ctx, res)
 	var report interface{}
+	var evidence interface{}
 	if article != nil {
 		_ = target.UpdateTaskStatus(res, "analyzing", "")
 		if r, err := target.AnalyzeArticle(ctx, *article); err == nil {
 			_ = target.SaveReport(res, r)
 			report = r
+			evidence = skill.ExtractEvidence(r.Results)
 			_ = target.UpdateTaskStatus(res, "analyzed", "")
 		} else {
 			_ = target.UpdateTaskStatus(res, "failed", err.Error())
@@ -80,6 +83,7 @@ func HandleCheckRequest(w http.ResponseWriter, r *http.Request) {
 		"status": "indexed",
 		"id":     res,
 		"report": report,
+		"evidence": evidence,
 	})
 }
 
@@ -106,6 +110,7 @@ func HandleReviewRequest(w http.ResponseWriter, r *http.Request) {
 	}
 	if report, ok := target.LoadReport(id); ok {
 		responseBody["report"] = report
+		responseBody["evidence"] = skill.ExtractEvidence(report.Results)
 	}
 
 	response, err := json.Marshal(responseBody)

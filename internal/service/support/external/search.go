@@ -65,3 +65,10 @@ func Search(ctx context.Context, query string, limit int) ([]SearchResult, error
 }
 
 func bytesReader(b []byte) *bytes.Reader { return bytes.NewReader(b) }
+
+func SearchWithSite(ctx context.Context, query, site string, limit int) ([]SearchResult, error) {
+	if site != "" {
+		query = fmt.Sprintf("%s site:%s", query, site)
+	}
+	return Search(ctx, query, limit)
+}
