@@ -6,33 +6,34 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/yihaoye/infoverify/dal/semantics_search"
+	"github.com/yihaoye/infoverify/model"
 )
 
 func CreateArticle(ctx context.Context, title, author, content string) (string, error) {
 	esClient := semantics_search.ArticleESClient
 
 	// Index a single article
-	article := semantics_search.Article{
+	article := model.Article{
 		ID:      uuid.New().String(),
 		Title:   title,
 		Content: content,
 		Author:  author,
 	}
-	err := esClient.IndexArticle(article)
+	docID, err := esClient.IndexArticle(article)
 	if err != nil {
 		log.Printf("Failed to index article: %v", err)
 		return "", err
 	}
 
-	return article.ID, nil
+	return docID, nil
 }
 
-func GetArticle(ctx context.Context, id string) (string, error) {
+func GetArticle(ctx context.Context, id string) (*model.Article, error) {
 	article, err := semantics_search.ArticleESClient.GetArticle(id)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	return article.Content, nil
+	return article, nil
 }
 
 func SearchArticle(ctx context.Context, query []string, size int) string {

@@ -9,6 +9,15 @@ import (
 	"github.com/yihaoye/infoverify/service/support/target"
 )
 
+type checkRequest struct {
+	URL     string `json:"url,omitempty"`
+	Article *struct {
+		Title   string `json:"title"`
+		Author  string `json:"author"`
+		Content string `json:"content"`
+	} `json:"article,omitempty"`
+}
+
 func HandleCheckRequest(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 	body, err := io.ReadAll(r.Body)
@@ -16,32 +25,43 @@ func HandleCheckRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to read request body", http.StatusInternalServerError)
 		return
 	}
-	// body has json field "content"
-	var payload map[string]map[string]string
+	var payload checkRequest
 	err = json.Unmarshal(body, &payload)
 	if err != nil {
 		http.Error(w, "Failed to unmarshal request body", http.StatusInternalServerError)
 		return
 	}
 
-	article := payload["article"]
-	if article == nil {
-		http.Error(w, "Invalid request body", http.StatusBadRequest)
+	w.Header().Set("Content-Type", "application/json")
+
+	if payload.URL != "" {
+		id, err := target.EnqueueCrawlTask(ctx, payload.URL)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Failed to enqueue task: %v", err), http.StatusBadRequest)
+			return
+		}
+		_ = json.NewEncoder(w).Encode(map[string]string{
+			"status": "queued",
+			"id":     id,
+		})
 		return
 	}
-	title, author, content := article["title"], article["author"], article["content"]
-	if title == "" || author == "" || content == "" {
+
+	if payload.Article == nil || payload.Article.Title == "" || payload.Article.Author == "" || payload.Article.Content == "" {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	res, err := target.CreateArticle(ctx, title, author, content)
+	res, err := target.CreateArticle(ctx, payload.Article.Title, payload.Article.Author, payload.Article.Content)
 	if err != nil {
 		http.Error(w, "Failed to create article", http.StatusInternalServerError)
 		return
 	}
 
-	fmt.Fprintf(w, "success: %s", res)
+	_ = json.NewEncoder(w).Encode(map[string]string{
+		"status": "indexed",
+		"id":     res,
+	})
 }
 
 func HandleAdvancedCheckRequest(w http.ResponseWriter, r *http.Request) {
