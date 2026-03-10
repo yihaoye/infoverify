@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/yihaoye/infoverify/internal/service/support/search"
 	"github.com/yihaoye/infoverify/internal/service/support/target"
 )
 
@@ -40,6 +41,7 @@ func HandleCheckRequest(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, fmt.Sprintf("Failed to enqueue task: %v", err), http.StatusBadRequest)
 			return
 		}
+		_, _ = target.UpsertTask(id, payload.URL, "queued", "")
 		_ = json.NewEncoder(w).Encode(map[string]string{
 			"status": "queued",
 			"id":     id,
@@ -57,13 +59,20 @@ func HandleCheckRequest(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Failed to create article", http.StatusInternalServerError)
 		return
 	}
+	_, _ = target.UpsertTask(res, "", "indexed", "")
 
 	article, _ := target.GetArticle(ctx, res)
 	var report interface{}
 	if article != nil {
+		_ = target.UpdateTaskStatus(res, "analyzing", "")
 		if r, err := target.AnalyzeArticle(ctx, *article); err == nil {
 			_ = target.SaveReport(res, r)
 			report = r
+			_ = target.UpdateTaskStatus(res, "analyzed", "")
+		} else {
+			_ = target.UpdateTaskStatus(res, "failed", err.Error())
+			http.Error(w, fmt.Sprintf("Analyze failed: %v", err), http.StatusInternalServerError)
+			return
 		}
 	}
 
@@ -107,4 +116,52 @@ func HandleReviewRequest(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(response)
+}
+
+func HandleSearchRequest(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query().Get("q")
+	if q == "" {
+		http.Error(w, "Missing q", http.StatusBadRequest)
+		return
+	}
+	ctx := r.Context()
+	results, err := search.SearchArticles(ctx, q, 10)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Search failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"query":   q,
+		"results": results,
+	})
+}
+
+func HandleTaskGetRequest(w http.ResponseWriter, r *http.Request) {
+	id := r.URL.Query().Get("id")
+	if id == "" {
+		http.Error(w, "Missing id", http.StatusBadRequest)
+		return
+	}
+	ctx := r.Context()
+	task, err := target.GetTask(ctx, id)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("Get task failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(task)
+}
+
+func HandleTaskListRequest(w http.ResponseWriter, r *http.Request) {
+	ctx := r.Context()
+	tasks, err := target.ListTasks(ctx, 20)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("List tasks failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{
+		"tasks": tasks,
+	})
 }

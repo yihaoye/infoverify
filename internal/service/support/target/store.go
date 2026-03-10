@@ -38,6 +38,11 @@ ON CONFLICT (id) DO UPDATE SET
 	if err != nil {
 		return "", fmt.Errorf("save article: %w", err)
 	}
+	_, err = db.ExecContext(context.Background(),
+		`UPDATE articles SET content_tsv = to_tsvector('simple', content) WHERE id = $1`, article.ID)
+	if err != nil {
+		return "", fmt.Errorf("update article tsv: %w", err)
+	}
 	return article.ID, nil
 }
 

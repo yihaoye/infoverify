@@ -66,11 +66,15 @@ func runWorker() {
 			log.Printf("Invalid URL received: %s. Skipping.", taskURL)
 			continue
 		}
+		taskID := target.IDFromURL(taskURL)
+		_ = target.UpdateTaskStatus(taskID, "crawling", "")
+
 		crawler := web_crawler.NewWebCrawler([]string{parsedURL.Host})
 
 		article, err := crawler.Crawl(taskURL)
 		if err != nil {
 			log.Printf("Failed to crawl %s: %v", taskURL, err)
+			_ = target.UpdateTaskStatus(taskID, "failed", err.Error())
 			continue
 		}
 
@@ -79,14 +83,19 @@ func runWorker() {
 		docID, err := target.SaveArticle(*article)
 		if err != nil {
 			log.Printf("Failed to store article %s: %v", article.URL, err)
+			_ = target.UpdateTaskStatus(taskID, "failed", err.Error())
 			continue
 		}
 		log.Printf("Successfully stored article %s with ID %s", article.URL, docID)
+		_ = target.UpdateTaskStatus(taskID, "indexed", "")
 
+		_ = target.UpdateTaskStatus(taskID, "analyzing", "")
 		if report, err := target.AnalyzeArticle(kv.Ctx, *article); err == nil {
 			_ = target.SaveReport(docID, report)
+			_ = target.UpdateTaskStatus(taskID, "analyzed", "")
 		} else {
 			log.Printf("Failed to analyze article %s: %v", article.URL, err)
+			_ = target.UpdateTaskStatus(taskID, "failed", err.Error())
 		}
 	}
 }

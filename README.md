@@ -44,6 +44,33 @@ psql "postgres://postgres:postgres@localhost:5432/infoverify?sslmode=disable" -f
 默认使用 Postgres（`DATABASE_URL` 可覆盖）：
 `postgres://postgres:postgres@localhost:5432/infoverify?sslmode=disable`
 
+## OpenAI
+LLM 作为总控调度器（需要配置 key）：
+```bash
+export OPENAI_API_KEY="your_key"
+export OPENAI_MODEL="gpt-4o-mini"
+export OPENAI_BASE_URL="https://api.openai.com/v1"
+```
+未配置 `OPENAI_API_KEY` 时，分析会返回错误。
+
+## 交叉验证模式
+默认只使用本地检索，不触发网络抓取：
+```bash
+export CROSS_VALIDATE_MODE="local"
+```
+如需允许交叉验证阶段进行抓取（仅复抓原 URL），设置：
+```bash
+export CROSS_VALIDATE_MODE="web"
+```
+
+## 外部检索（可选）
+LLM 在交叉验证阶段可调用外部检索工具，需要配置搜索 API：
+```bash
+export SEARCH_API_URL="https://your-search-provider/api"
+export SEARCH_API_KEY="your_key"
+```
+外部抓取会受 allowlist 限制（见 `internal/service/support/external/allowlist.go`）。
+
 ## API
 提交 URL 进入爬取队列：
 ```bash

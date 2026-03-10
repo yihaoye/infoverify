@@ -19,6 +19,7 @@ func EnqueueCrawlTask(ctx context.Context, taskURL string) (string, error) {
 	}
 
 	docID := IDFromURL(taskURL)
+	_, _ = UpsertTask(docID, taskURL, "queued", "")
 	if err := kv.Rdb.LPush(kv.Ctx, CrawlTaskQueueKey, taskURL).Err(); err != nil {
 		return "", err
 	}
