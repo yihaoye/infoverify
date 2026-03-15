@@ -83,6 +83,8 @@ export SEARCH_API_KEY="your_key"
 - Crossref（`search_crossref`）
 - Semantic Scholar（`search_semanticscholar`）
 - Canonical refs（`canonical_refs`，物理/数学/化学/医学/生物）
+- Finance template（`finance_template`）
+- Source weight（`source_weight`）
 
 学术检索可选配置：
 ```bash

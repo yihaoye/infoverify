@@ -1,0 +1,61 @@
+{
+  "macro_check": {
+    "name": "macro_check",
+    "description": "宏观数据核验模板",
+    "fields": [
+      "indicator",
+      "value",
+      "unit",
+      "period",
+      "country_or_region",
+      "source_url"
+    ],
+    "output": [
+      "verdict",
+      "confidence",
+      "primary_sources",
+      "supporting_sources",
+      "conflicts",
+      "notes"
+    ]
+  },
+  "financial_report_check": {
+    "name": "financial_report_check",
+    "description": "财报/公告核验模板",
+    "fields": [
+      "company",
+      "ticker",
+      "period",
+      "metric",
+      "value",
+      "unit",
+      "source_url"
+    ],
+    "output": [
+      "verdict",
+      "confidence",
+      "primary_sources",
+      "supporting_sources",
+      "conflicts",
+      "notes"
+    ]
+  },
+  "news_crosscheck": {
+    "name": "news_crosscheck",
+    "description": "财经新闻交叉验证模板",
+    "fields": [
+      "claim",
+      "entities",
+      "time_range",
+      "source_url"
+    ],
+    "output": [
+      "verdict",
+      "confidence",
+      "primary_sources",
+      "supporting_sources",
+      "conflicts",
+      "notes"
+    ]
+  }
+}

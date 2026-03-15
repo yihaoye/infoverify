@@ -14,6 +14,7 @@ import (
 	"github.com/yihaoye/infoverify/internal/service/core/skill"
 	"github.com/yihaoye/infoverify/internal/service/support/canonical"
 	"github.com/yihaoye/infoverify/internal/service/support/external"
+	"github.com/yihaoye/infoverify/internal/service/support/finance"
 	"github.com/yihaoye/infoverify/internal/service/support/search"
 )
 
@@ -53,6 +54,8 @@ func RunLLMController(ctx context.Context, article model.Article) (skill.Report,
 		{Name: "search_crossref", Description: "Search Crossref works", Parameters: map[string]interface{}{"type": "object", "properties": map[string]interface{}{"query": map[string]interface{}{"type": "string"}, "limit": map[string]interface{}{"type": "integer"}}, "required": []string{"query"}}},
 		{Name: "search_semanticscholar", Description: "Search Semantic Scholar works", Parameters: map[string]interface{}{"type": "object", "properties": map[string]interface{}{"query": map[string]interface{}{"type": "string"}, "limit": map[string]interface{}{"type": "integer"}}, "required": []string{"query"}}},
 		{Name: "canonical_refs", Description: "Lookup canonical references by domain or keyword (physics, mathematics, chemistry, medicine, biology)", Parameters: map[string]interface{}{"type": "object", "properties": map[string]interface{}{"domain": map[string]interface{}{"type": "string"}, "keyword": map[string]interface{}{"type": "string"}, "limit": map[string]interface{}{"type": "integer"}}}},
+		{Name: "finance_template", Description: "Get finance verification template by name (macro_check, financial_report_check, news_crosscheck)", Parameters: map[string]interface{}{"type": "object", "properties": map[string]interface{}{"name": map[string]interface{}{"type": "string"}}, "required": []string{"name"}}},
+		{Name: "source_weight", Description: "Get source credibility weight by URL or domain", Parameters: map[string]interface{}{"type": "object", "properties": map[string]interface{}{"source": map[string]interface{}{"type": "string"}}, "required": []string{"source"}}},
 		{Name: "fetch_url", Description: "Fetch and extract content from a URL (allowlist enforced)", Parameters: map[string]interface{}{"type": "object", "properties": map[string]interface{}{"url": map[string]interface{}{"type": "string"}}, "required": []string{"url"}}},
 	}
 	tools := []clients.GeminiTool{{FunctionDeclarations: decls}}
@@ -254,6 +257,23 @@ func executeTool(ctx context.Context, call llmToolCall, article model.Article) (
 			"items": items,
 		})
 		return string(b), buildEvidenceResult("canonical_refs", domain, canonicalToEvidence(items))
+	case "finance_template":
+		name, _ := call.Arguments["name"].(string)
+		tpl, err := finance.GetTemplate(name)
+		if err != nil {
+			return toolError(err), nil
+		}
+		b, _ := json.Marshal(tpl)
+		return string(b), nil
+	case "source_weight":
+		src, _ := call.Arguments["source"].(string)
+		w, tier := finance.SourceWeight(src)
+		b, _ := json.Marshal(map[string]interface{}{
+			"source": src,
+			"weight": w,
+			"tier":   tier,
+		})
+		return string(b), nil
 	case "fetch_url":
 		raw, _ := call.Arguments["url"].(string)
 		page, err := external.FetchURL(raw)

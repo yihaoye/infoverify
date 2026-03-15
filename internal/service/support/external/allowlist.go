@@ -22,6 +22,10 @@ func AllowedDomains() map[string]struct{} {
 		"api.semanticscholar.org",
 		"crossref.org",
 		"api.crossref.org",
+		"sec.gov",
+		"edgar.sec.gov",
+		"nasdaq.com",
+		"nyse.com",
 	}
 	m := make(map[string]struct{}, len(list))
 	for _, d := range list {
