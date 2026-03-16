@@ -1,18 +1,19 @@
-package kv
+package redis
 
 import (
 	"context"
+
 	"github.com/go-redis/redis/v8"
 )
 
 var (
-	// Rdb is the redis client
+	// Rdb 是 Redis 客户端实例。
 	Rdb *redis.Client
 	Ctx = context.Background()
 )
 
-// InitRedis initializes the redis client
-func InitRedis() {
+// Init initializes the redis client
+func Init() {
 	Rdb = redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379", // Corresponds to the port mapping in docker-compose.yaml
 		Password: "",               // No password set
@@ -26,8 +27,8 @@ func InitRedis() {
 	}
 }
 
-// StopRedis closes the redis client
-func StopRedis() {
+// Stop closes the redis client
+func Stop() {
 	if Rdb != nil {
 		Rdb.Close()
 	}

@@ -13,6 +13,7 @@ import (
 )
 
 func SaveArticle(article model.Article) (string, error) {
+	// 保存文章并更新全文检索字段。
 	if article.ID == "" {
 		if article.URL != "" {
 			article.ID = IDFromURL(article.URL)
@@ -47,6 +48,7 @@ ON CONFLICT (id) DO UPDATE SET
 }
 
 func LoadArticle(id string) (*model.Article, error) {
+	// 根据文章 ID 读取内容。
 	if id == "" {
 		return nil, errors.New("id is empty")
 	}
@@ -65,6 +67,7 @@ func LoadArticle(id string) (*model.Article, error) {
 }
 
 func SaveReport(id string, report skill.Report) error {
+	// 保存分析报告（JSON）。
 	if id == "" {
 		return errors.New("id is empty")
 	}
@@ -92,6 +95,7 @@ ON CONFLICT (article_id) DO UPDATE SET
 }
 
 func LoadReport(id string) (skill.Report, bool) {
+	// 读取分析报告。
 	db := postgres.DB()
 	if db == nil {
 		return skill.Report{}, false

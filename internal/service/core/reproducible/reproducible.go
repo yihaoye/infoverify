@@ -10,10 +10,11 @@ import (
 // Skill evaluates reproducibility likelihood.
 type Skill struct{}
 
-func (Skill) Name() string  { return "reproducibility" }
+func (Skill) Name() string    { return "reproducibility" }
 func (Skill) Weight() float64 { return 0.3 }
 
 func (Skill) Evaluate(_ context.Context, in skill.Input) (skill.Result, error) {
+	// 通过内容长度 + 是否有 URL 来近似可复现性。
 	content := in.Article.Content
 	url := in.Article.URL
 	if content == "" {
@@ -30,6 +31,7 @@ func (Skill) Evaluate(_ context.Context, in skill.Input) (skill.Result, error) {
 		urlScore = 1.0
 	}
 
+	// URL 作为重要信号占 40%。
 	score := lengthScore*0.6 + urlScore*0.4
 	return skill.Result{
 		Score:   score,

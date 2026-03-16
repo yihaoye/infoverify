@@ -12,6 +12,7 @@ type WebCrawler struct {
 }
 
 func NewWebCrawler(domains []string) *WebCrawler {
+	// 简单爬虫：仅允许白名单域名。
 	c := colly.NewCollector(
 		colly.AllowedDomains(domains...),
 	)
@@ -22,6 +23,7 @@ func NewWebCrawler(domains []string) *WebCrawler {
 }
 
 func (wc *WebCrawler) Crawl(url string) (*model.Article, error) {
+	// 仅抽取 h1 和 p，作为最小可用抓取能力。
 	article := &model.Article{}
 	var body string
 

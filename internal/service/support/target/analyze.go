@@ -9,5 +9,6 @@ import (
 )
 
 func AnalyzeArticle(ctx context.Context, article model.Article) (skill.Report, error) {
+	// 调用 LLM 总控进行分析。
 	return agent.RunLLMController(ctx, article)
 }

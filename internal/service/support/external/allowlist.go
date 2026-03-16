@@ -3,6 +3,7 @@ package external
 import "strings"
 
 func AllowedDomains() map[string]struct{} {
+	// 白名单域名：用于限制抓取范围。
 	list := []string{
 		"un.org",
 		"data.un.org",
@@ -16,12 +17,6 @@ func AllowedDomains() map[string]struct{} {
 		"statista.com",
 		"ourworldindata.org",
 		"wikipedia.org",
-		"openalex.org",
-		"api.openalex.org",
-		"semanticscholar.org",
-		"api.semanticscholar.org",
-		"crossref.org",
-		"api.crossref.org",
 		"sec.gov",
 		"edgar.sec.gov",
 		"nasdaq.com",
@@ -35,6 +30,7 @@ func AllowedDomains() map[string]struct{} {
 }
 
 func IsAllowedHost(host string) bool {
+	// 允许主域名或其子域名。
 	host = strings.ToLower(host)
 	if host == "" {
 		return false

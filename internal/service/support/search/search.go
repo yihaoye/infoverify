@@ -9,6 +9,7 @@ import (
 )
 
 func SearchArticles(ctx context.Context, query string, limit int) ([]model.Article, error) {
+	// Postgres 全文检索（tsvector + websearch_to_tsquery）。
 	db := postgres.DB()
 	if db == nil {
 		return nil, fmt.Errorf("postgres not initialized")

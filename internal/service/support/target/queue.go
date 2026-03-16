@@ -5,12 +5,13 @@ import (
 	"fmt"
 	"net/url"
 
-	"github.com/yihaoye/infoverify/internal/dal/kv"
+	"github.com/yihaoye/infoverify/internal/dal/redis"
 )
 
 const CrawlTaskQueueKey = "infoverify:crawl_tasks"
 
 func EnqueueCrawlTask(ctx context.Context, taskURL string) (string, error) {
+	// 入队等待 Worker 抓取。
 	if taskURL == "" {
 		return "", fmt.Errorf("url is empty")
 	}
@@ -20,7 +21,7 @@ func EnqueueCrawlTask(ctx context.Context, taskURL string) (string, error) {
 
 	docID := IDFromURL(taskURL)
 	_, _ = UpsertTask(docID, taskURL, "queued", "")
-	if err := kv.Rdb.LPush(kv.Ctx, CrawlTaskQueueKey, taskURL).Err(); err != nil {
+	if err := redis.Rdb.LPush(redis.Ctx, CrawlTaskQueueKey, taskURL).Err(); err != nil {
 		return "", err
 	}
 	return docID, nil

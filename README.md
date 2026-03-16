@@ -63,35 +63,21 @@ export CROSS_VALIDATE_MODE="local"
 export CROSS_VALIDATE_MODE="web"
 ```
 
-## 外部检索（可选）
-LLM 在交叉验证阶段可调用外部检索工具，需要配置搜索 API：
-```bash
-export SEARCH_API_URL="https://your-search-provider/api"
-export SEARCH_API_KEY="your_key"
-```
-外部抓取会受 allowlist 限制（见 `internal/service/support/external/allowlist.go`）。
-
-默认提供权威源搜索工具：
-- UN（`search_un`）
-- World Bank（`search_worldbank`）
-- WHO（`search_who`）
-- IMF（`search_imf`）
-- FAO（`search_fao`）
-- OECD（`search_oecd`）
-- Wikipedia（`search_wikipedia`）
-- OpenAlex（`search_openalex`）
-- Crossref（`search_crossref`）
-- Semantic Scholar（`search_semanticscholar`）
+## 工具（MVP）
+默认提供以下工具：
+- 本地检索（`search_articles`）
 - Canonical refs（`canonical_refs`，物理/数学/化学/医学/生物）
-- Finance template（`finance_template`）
-- Source weight（`source_weight`）
+- URL 抓取（`fetch_url`，受 allowlist 限制，见 `internal/service/support/external/allowlist.go`）
+TODO：后续再接入财经数据源抓取与结构化（如 SEC、Yahoo、Bloomberg）。
 
-学术检索可选配置：
+## Cloudflare Browser Rendering（可选）
+如需使用 Cloudflare Browser Rendering 作为抓取主路径，配置：
 ```bash
-export OPENALEX_API_KEY="optional_key"
-export CROSSREF_MAILTO="you@example.com"
-export SEMANTIC_SCHOLAR_API_KEY="optional_key"
+export CF_BR_ACCOUNT_ID="your_account_id"
+export CF_BR_API_TOKEN="your_api_token"
+export CF_BR_BASE_URL="https://api.cloudflare.com/client/v4"
 ```
+未配置时会自动回退到本地爬虫。
 
 ## API
 提交 URL 进入爬取队列：
@@ -112,6 +98,13 @@ curl -X POST http://localhost:8080/api/basic/check \
 ```bash
 curl "http://localhost:8080/api/basic/get?id=<article_id>"
 ```
+
+Browser Rendering 健康检查（可选）：
+```bash
+curl "http://localhost:8080/api/basic/tools/browser_rendering/health"
+curl "http://localhost:8080/api/basic/tools/browser_rendering/health?url=https://example.com"
+```
+返回示例字段：`status`、`configured`、`elapsed_ms`、`title`、`content_len`、`preview`。
 
 ## Milestone
 * [ ] Article

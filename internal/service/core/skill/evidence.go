@@ -1,6 +1,7 @@
 package skill
 
 func ExtractEvidence(results []Result) []Evidence {
+	// 汇总各技能输出的证据，便于 API 返回。
 	if len(results) == 0 {
 		return nil
 	}

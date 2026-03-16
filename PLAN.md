@@ -17,6 +17,8 @@
 - **主存储（Postgres）**：文章内容、元数据、验证任务、来源画像等全部落在 Postgres。
 - **任务队列（Redis）**：只负责 URL 任务入队与 Worker 消费。
 - **动态查询（可选）**：仅在本地数据不足时触发（后续扩展）。
+- **内容获取（Cloudflare Browser Rendering）**：以 Cloudflare Browser Rendering 作为“按需渲染/抽取”的主路径，本地爬虫仅作为兜底。  
+  *注意：Browser Rendering 主要用于抓取/渲染/抽取，本身不负责“发现内容”。*
 - **搜索能力（Postgres）**：通过 `tsvector + GIN` 实现全文检索，`pg_trgm` 支持相似度匹配。
 - **Agent 调度（MVP 轻量版）**：固定流程 + Skills 调度，保证可解释与可控。
 
@@ -26,6 +28,7 @@
 
 - [x] **阶段 1：网页抓取服务**
   - 说明：实现单 URL 的正文抽取，用于链接输入的最小能力。
+  - 计划调整：后续改为 Cloudflare Browser Rendering 主路径，本地爬虫降级为 fallback。
 
 - [x] **阶段 2：异步任务与队列**
   - 说明：Server 入队、Worker 消费并抓取内容。
@@ -55,3 +58,5 @@
     - ES 或向量检索
     - NLP/NLI 模型
     - 更完整的交叉验证流程（动态调度）
+    - 可选接入 Cloudflare Browser Rendering 的 /crawl 规模化抓取能力（受限额度与速率）
+    - 外部搜索 API 与公开数据源的规模化接入（MVP 可先不做）

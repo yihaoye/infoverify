@@ -10,6 +10,7 @@ type Evidence struct {
 }
 
 type Result struct {
+	// Skill 为技能标识，Score 为该技能评分。
 	Skill    string     `json:"skill"`
 	Score    float64    `json:"score"`
 	Weight   float64    `json:"weight"`
@@ -18,11 +19,13 @@ type Result struct {
 }
 
 type Report struct {
+	// Report 汇总文章与各技能结果。
 	Article      model.Article `json:"article"`
 	OverallScore float64       `json:"overall_score"`
 	Results      []Result      `json:"results"`
 }
 
 type Input struct {
+	// Input 为技能统一输入。
 	Article model.Article
 }

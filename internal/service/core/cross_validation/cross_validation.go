@@ -15,10 +15,11 @@ import (
 // Skill evaluates cross-validation.
 type Skill struct{}
 
-func (Skill) Name() string  { return "cross_validation" }
+func (Skill) Name() string    { return "cross_validation" }
 func (Skill) Weight() float64 { return 0.3 }
 
 func (Skill) Evaluate(ctx context.Context, in skill.Input) (skill.Result, error) {
+	// 交叉验证：local 走本地检索，web 仅复抓原 URL。
 	mode := strings.ToLower(strings.TrimSpace(os.Getenv("CROSS_VALIDATE_MODE")))
 	if mode == "" {
 		mode = "local"
@@ -31,6 +32,7 @@ func (Skill) Evaluate(ctx context.Context, in skill.Input) (skill.Result, error)
 
 	switch mode {
 	case "local":
+		// 用标题或正文片段进行本地检索。
 		query := buildQuery(in.Article.Title, in.Article.Content)
 		articles, err := search.SearchArticles(ctx, query, 5)
 		if err != nil {
@@ -48,7 +50,7 @@ func (Skill) Evaluate(ctx context.Context, in skill.Input) (skill.Result, error)
 		}
 		return result, nil
 	case "web":
-		// Only recrawl the same URL for consistency check.
+		// 仅复抓原 URL 做一致性检查。
 		if in.Article.URL == "" {
 			result.Score = 0
 			result.Summary = "web mode: no url"
@@ -68,6 +70,7 @@ func (Skill) Evaluate(ctx context.Context, in skill.Input) (skill.Result, error)
 			return result, nil
 		}
 		consistent := 0
+		// 标题一致 + 内容非空 作为最小一致性判断。
 		if article.Title == in.Article.Title {
 			consistent++
 		}

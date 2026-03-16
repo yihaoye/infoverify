@@ -18,6 +18,7 @@ type GeminiClient struct {
 }
 
 func NewGeminiClient() (*GeminiClient, error) {
+	// 从环境变量读取 Gemini 配置。
 	apiKey := os.Getenv("GEMINI_API_KEY")
 	if apiKey == "" {
 		return nil, errors.New("GEMINI_API_KEY is not set")
@@ -36,9 +37,9 @@ func NewGeminiClient() (*GeminiClient, error) {
 }
 
 type GeminiPart struct {
-	Text             string            `json:"text,omitempty"`
-	FunctionCall     *GeminiFuncCall   `json:"functionCall,omitempty"`
-	FunctionResponse *GeminiFuncResp   `json:"functionResponse,omitempty"`
+	Text             string          `json:"text,omitempty"`
+	FunctionCall     *GeminiFuncCall `json:"functionCall,omitempty"`
+	FunctionResponse *GeminiFuncResp `json:"functionResponse,omitempty"`
 }
 
 type GeminiContent struct {
@@ -67,8 +68,8 @@ type GeminiFuncDecl struct {
 }
 
 type GeminiRequest struct {
-	Contents []GeminiContent `json:"contents"`
-	Tools    []GeminiTool    `json:"tools,omitempty"`
+	Contents         []GeminiContent        `json:"contents"`
+	Tools            []GeminiTool           `json:"tools,omitempty"`
 	GenerationConfig map[string]interface{} `json:"generationConfig,omitempty"`
 }
 
@@ -82,6 +83,7 @@ type GeminiResponse struct {
 }
 
 func (c *GeminiClient) GenerateContent(ctx context.Context, model string, req GeminiRequest) (GeminiResponse, error) {
+	// Gemini 调用入口：模型 + 工具调用。
 	if model == "" {
 		return GeminiResponse{}, errors.New("model is empty")
 	}
@@ -120,6 +122,7 @@ func (c *GeminiClient) GenerateContent(ctx context.Context, model string, req Ge
 }
 
 func ExtractText(resp GeminiResponse) string {
+	// 提取首个文本结果。
 	if len(resp.Candidates) == 0 {
 		return ""
 	}
@@ -133,6 +136,7 @@ func ExtractText(resp GeminiResponse) string {
 }
 
 func ExtractFunctionCalls(resp GeminiResponse) []GeminiFuncCall {
+	// 提取函数调用（tool calls）。
 	if len(resp.Candidates) == 0 {
 		return nil
 	}

@@ -3,19 +3,21 @@ package dal
 import (
 	"log"
 
-	"github.com/yihaoye/infoverify/internal/dal/kv"
 	"github.com/yihaoye/infoverify/internal/dal/postgres"
+	"github.com/yihaoye/infoverify/internal/dal/redis"
 )
 
 func Init() {
-	kv.InitRedis()
+	// 初始化依赖：Redis 队列 + Postgres 存储。
+	redis.Init()
 	if err := postgres.Init(); err != nil {
 		log.Fatalf("failed to init postgres: %v", err)
 	}
 }
 
 func Stop() {
-	kv.StopRedis()
+	// 优雅关闭连接。
+	redis.Stop()
 	postgres.Stop()
 	// xxx.Close()
 }
