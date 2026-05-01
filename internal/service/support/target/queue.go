@@ -18,6 +18,9 @@ func EnqueueCrawlTask(ctx context.Context, taskURL string) (string, error) {
 	if _, err := url.ParseRequestURI(taskURL); err != nil {
 		return "", fmt.Errorf("invalid url: %w", err)
 	}
+	if !redis.Ready() {
+		return "", fmt.Errorf("redis not configured")
+	}
 
 	docID := IDFromURL(taskURL)
 	_, _ = UpsertTask(docID, taskURL, "queued", "")

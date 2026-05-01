@@ -13,7 +13,7 @@ var (
 )
 
 // Init initializes the redis client
-func Init() {
+func Init() error {
 	Rdb = redis.NewClient(&redis.Options{
 		Addr:     "localhost:6379", // Corresponds to the port mapping in docker-compose.yaml
 		Password: "",               // No password set
@@ -23,8 +23,10 @@ func Init() {
 	// Check the connection
 	_, err := Rdb.Ping(Ctx).Result()
 	if err != nil {
-		panic("failed to connect redis")
+		Rdb = nil
+		return err
 	}
+	return nil
 }
 
 // Stop closes the redis client
@@ -32,4 +34,8 @@ func Stop() {
 	if Rdb != nil {
 		Rdb.Close()
 	}
+}
+
+func Ready() bool {
+	return Rdb != nil
 }

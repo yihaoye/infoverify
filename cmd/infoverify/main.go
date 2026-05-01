@@ -36,7 +36,7 @@ func main() {
 }
 
 func runServer() {
-	dal.Init()
+	dal.InitServer()
 	defer dal.Stop()
 
 	// 路由注册并启动 HTTP 服务。
@@ -46,7 +46,7 @@ func runServer() {
 }
 
 func runWorker() {
-	dal.Init()
+	dal.InitWorker()
 	defer dal.Stop()
 
 	log.Println("Worker started. Waiting for tasks from the queue...")

@@ -19,6 +19,8 @@ func (Skill) Evaluate(_ context.Context, in skill.Input) (skill.Result, error) {
 	url := in.Article.URL
 	if content == "" {
 		return skill.Result{
+			Skill:   "reproducibility",
+			Weight:  0.3,
 			Score:   0,
 			Summary: "empty content",
 		}, nil
@@ -34,6 +36,8 @@ func (Skill) Evaluate(_ context.Context, in skill.Input) (skill.Result, error) {
 	// URL 作为重要信号占 40%。
 	score := lengthScore*0.6 + urlScore*0.4
 	return skill.Result{
+		Skill:   "reproducibility",
+		Weight:  0.3,
 		Score:   score,
 		Summary: fmt.Sprintf("len=%d url=%t", length, url != ""),
 		Evidence: []skill.Evidence{

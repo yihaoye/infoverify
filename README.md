@@ -20,6 +20,20 @@
 ## 运行
 `docker-compose up -d`  
 
+启动 HTTP API 服务（默认监听 `:8080`）：
+```bash
+go run ./cmd/infoverify -mode server
+```
+
+说明：
+- 只用轻量打分接口 `/api/basic/score` 时，不强依赖 Postgres/Redis（未启动也能跑，但相关接口会不可用）。
+- 如需使用 `/api/basic/check`（URL 入队抓取/分析）、`/api/basic/get`、`/api/basic/search`、任务接口等，请先运行 `docker-compose up -d` 启动 Postgres/Redis。
+
+可选：启动后台 worker（用于处理 `/api/basic/check` 提交的 URL 抓取与分析队列）：
+```bash
+go run ./cmd/infoverify -mode worker
+```
+
 ## 停止
 `docker-compose down`
 
@@ -93,6 +107,21 @@ curl -X POST http://localhost:8080/api/basic/check \
   -H "Content-Type: application/json" \
   -d '{"article":{"title":"t","author":"a","content":"c"}}'
 ```
+
+轻量打分（不入库、不抓取）：输入文本 → 三大原则分项分数 + 总分：
+```bash
+curl -X POST http://localhost:8080/api/basic/score \
+  -H "Content-Type: application/json" \
+  -d '{"text":"According to https://example.com/report revenue grew 20% YoY.","url":"https://news.example.com"}'
+```
+
+可选：让 Gemini 额外输出一个“独立可信度评估”（与三原则分开），在请求体加 `llm=true`：
+```bash
+curl -X POST http://localhost:8080/api/basic/score \
+  -H "Content-Type: application/json" \
+  -d '{"text":"...","llm":true}'
+```
+需要先配置 `GEMINI_API_KEY`（见上面的 Gemini 配置段落）。
 
 获取已索引内容：
 ```bash

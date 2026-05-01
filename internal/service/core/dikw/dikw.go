@@ -19,6 +19,8 @@ func (Skill) Evaluate(_ context.Context, in skill.Input) (skill.Result, error) {
 	content := in.Article.Content
 	if content == "" {
 		return skill.Result{
+			Skill:   "detail_richness",
+			Weight:  0.4,
 			Score:   0,
 			Summary: "empty content",
 		}, nil
@@ -35,6 +37,8 @@ func (Skill) Evaluate(_ context.Context, in skill.Input) (skill.Result, error) {
 
 	score := (lengthScore*0.5 + digitScore*0.3 + punctScore*0.2)
 	return skill.Result{
+		Skill:   "detail_richness",
+		Weight:  0.4,
 		Score:   score,
 		Summary: fmt.Sprintf("len=%d digits=%d punct=%d", length, digitCount, punctCount),
 		Evidence: []skill.Evidence{
