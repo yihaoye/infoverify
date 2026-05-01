@@ -27,6 +27,20 @@ func FetchURL(ctx context.Context, rawURL string) (*FetchedPage, error) {
 		return nil, fmt.Errorf("host not allowed: %s", parsed.Host)
 	}
 
+	return fetchURLByHost(ctx, rawURL, parsed.Host)
+}
+
+// FetchURLUnrestricted is an opt-in fetch helper that does NOT apply the allowlist.
+// Use it only in endpoints where open-web fetching is explicitly desired.
+func FetchURLUnrestricted(ctx context.Context, rawURL string) (*FetchedPage, error) {
+	parsed, err := url.Parse(rawURL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid url: %w", err)
+	}
+	return fetchURLByHost(ctx, rawURL, parsed.Host)
+}
+
+func fetchURLByHost(ctx context.Context, rawURL, host string) (*FetchedPage, error) {
 	if browser_rendering.Configured() {
 		// BR 返回 Markdown，适合下游抽取与 LLM 使用。
 		md, err := browser_rendering.FetchMarkdown(ctx, rawURL)
@@ -36,7 +50,7 @@ func FetchURL(ctx context.Context, rawURL string) (*FetchedPage, error) {
 		}
 	}
 
-	crawler := web_crawler.NewWebCrawler([]string{parsed.Host})
+	crawler := web_crawler.NewWebCrawler([]string{host})
 	article, err := crawler.Crawl(rawURL)
 	if err != nil {
 		return nil, err

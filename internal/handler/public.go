@@ -130,9 +130,43 @@ func HandleScoreRequest(w http.ResponseWriter, r *http.Request) {
 	payload.URL = strings.TrimSpace(payload.URL)
 	payload.Title = strings.TrimSpace(payload.Title)
 
+	var fetched map[string]interface{}
 	if payload.Text == "" {
-		http.Error(w, "Missing text", http.StatusBadRequest)
-		return
+		// URL-only mode: fetch content (allowlist enforced by external package).
+		if payload.URL == "" {
+			http.Error(w, "Missing text or url", http.StatusBadRequest)
+			return
+		}
+		parsed, err := url.Parse(payload.URL)
+		if err != nil || parsed.Host == "" {
+			http.Error(w, "Invalid url", http.StatusBadRequest)
+			return
+		}
+		if parsed.Scheme != "http" && parsed.Scheme != "https" {
+			http.Error(w, "Invalid url scheme", http.StatusBadRequest)
+			return
+		}
+
+		page, err := external.FetchURLUnrestricted(ctx, payload.URL)
+		if err != nil {
+			http.Error(w, fmt.Sprintf("Fetch url failed: %v", err), http.StatusBadRequest)
+			return
+		}
+		payload.Text = strings.TrimSpace(page.Content)
+		if payload.Title == "" {
+			payload.Title = strings.TrimSpace(page.Title)
+		}
+		fetched = map[string]interface{}{
+			"url":         page.URL,
+			"title":       page.Title,
+			"content_len": len(page.Content),
+			"preview":     previewText(page.Content, 240),
+		}
+
+		if payload.Text == "" {
+			http.Error(w, "Empty content fetched from url", http.StatusBadRequest)
+			return
+		}
 	}
 
 	in := skill.Input{
@@ -170,6 +204,9 @@ func HandleScoreRequest(w http.ResponseWriter, r *http.Request) {
 			detailRes.Skill: detailRes.Score,
 		},
 		"results": results,
+	}
+	if fetched != nil {
+		resp["fetched"] = fetched
 	}
 	if payload.LLM {
 		resp["llm_assessment"] = llmAssess

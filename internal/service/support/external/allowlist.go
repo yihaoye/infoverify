@@ -1,6 +1,9 @@
 package external
 
-import "strings"
+import (
+	"os"
+	"strings"
+)
 
 func AllowedDomains() map[string]struct{} {
 	// 白名单域名：用于限制抓取范围。
@@ -22,6 +25,20 @@ func AllowedDomains() map[string]struct{} {
 		"nasdaq.com",
 		"nyse.com",
 	}
+
+	// Extra allowlist domains (comma-separated), e.g.:
+	//   EXTERNAL_ALLOWLIST_EXTRA_DOMAINS="reuters.com,finance.yahoo.com"
+	// This is intentionally opt-in to avoid turning URL fetching into an open proxy.
+	if extra := strings.TrimSpace(os.Getenv("EXTERNAL_ALLOWLIST_EXTRA_DOMAINS")); extra != "" {
+		for _, part := range strings.Split(extra, ",") {
+			d := strings.ToLower(strings.TrimSpace(part))
+			if d == "" {
+				continue
+			}
+			list = append(list, d)
+		}
+	}
+
 	m := make(map[string]struct{}, len(list))
 	for _, d := range list {
 		m[strings.ToLower(d)] = struct{}{}

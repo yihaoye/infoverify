@@ -80,9 +80,18 @@ export CROSS_VALIDATE_MODE="web"
 ## 工具（MVP）
 默认提供以下工具：
 - 本地检索（`search_articles`）
+- 新闻检索（`news_search`，免费源：GDELT；可选 SEC filings，需要设置 `SEC_USER_AGENT`）
 - Canonical refs（`canonical_refs`，物理/数学/化学/医学/生物）
 - URL 抓取（`fetch_url`，受 allowlist 限制，见 `internal/service/support/external/allowlist.go`）
 TODO：后续再接入财经数据源抓取与结构化（如 SEC、Yahoo、Bloomberg）。
+
+### SEC_USER_AGENT
+如果启用 `news_search` 的 `ticker` 参数（会抓取 SEC filings），需要提供 `SEC_USER_AGENT`（建议包含联系方式）：
+```bash
+export SEC_USER_AGENT="infoverify/0.1 (contact: you@example.com)"
+```
+
+说明：`/api/basic/score` 的 URL 模式为了便于插件使用，不走 allowlist（仅校验 http/https）。
 
 ## Cloudflare Browser Rendering（可选）
 如需使用 Cloudflare Browser Rendering 作为抓取主路径，配置：
@@ -113,6 +122,13 @@ curl -X POST http://localhost:8080/api/basic/check \
 curl -X POST http://localhost:8080/api/basic/score \
   -H "Content-Type: application/json" \
   -d '{"text":"According to https://example.com/report revenue grew 20% YoY.","url":"https://news.example.com"}'
+```
+
+URL 模式（先抓取 URL 正文，再打分；受 allowlist 限制）：
+```bash
+curl -X POST http://localhost:8080/api/basic/score \
+  -H "Content-Type: application/json" \
+  -d '{"url":"https://example.com/article"}'
 ```
 
 可选：让 Gemini 额外输出一个“独立可信度评估”（与三原则分开），在请求体加 `llm=true`：

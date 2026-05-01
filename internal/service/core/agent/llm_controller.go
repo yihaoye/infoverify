@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"time"
 
 	"github.com/yihaoye/infoverify/internal/clients"
 	"github.com/yihaoye/infoverify/internal/model"
@@ -14,6 +15,7 @@ import (
 	"github.com/yihaoye/infoverify/internal/service/core/skill"
 	"github.com/yihaoye/infoverify/internal/service/support/canonical"
 	"github.com/yihaoye/infoverify/internal/service/support/external"
+	"github.com/yihaoye/infoverify/internal/service/support/news"
 	"github.com/yihaoye/infoverify/internal/service/support/search"
 )
 
@@ -43,6 +45,7 @@ func RunLLMController(ctx context.Context, article model.Article) (skill.Report,
 	decls := []clients.GeminiFuncDecl{
 		// MVP 工具集合。
 		{Name: "search_articles", Description: "Search local articles by query", Parameters: map[string]interface{}{"type": "object", "properties": map[string]interface{}{"query": map[string]interface{}{"type": "string"}, "limit": map[string]interface{}{"type": "integer"}}, "required": []string{"query"}}},
+		{Name: "news_search", Description: "Search recent US-market news links (free sources: GDELT; optional SEC filings when ticker is provided)", Parameters: map[string]interface{}{"type": "object", "properties": map[string]interface{}{"query": map[string]interface{}{"type": "string"}, "timespan": map[string]interface{}{"type": "string", "description": "GDELT timespan like 24h, 1d, 7d"}, "max_records": map[string]interface{}{"type": "integer"}, "ticker": map[string]interface{}{"type": "string", "description": "Optional US stock ticker (e.g., AAPL) to include SEC filings"}}, "required": []string{"query"}}},
 		{Name: "canonical_refs", Description: "Lookup canonical references by domain or keyword (physics, mathematics, chemistry, medicine, biology)", Parameters: map[string]interface{}{"type": "object", "properties": map[string]interface{}{"domain": map[string]interface{}{"type": "string"}, "keyword": map[string]interface{}{"type": "string"}, "limit": map[string]interface{}{"type": "integer"}}}},
 		{Name: "fetch_url", Description: "Fetch and extract content from a URL (allowlist enforced)", Parameters: map[string]interface{}{"type": "object", "properties": map[string]interface{}{"url": map[string]interface{}{"type": "string"}}, "required": []string{"url"}}},
 	}
@@ -147,6 +150,25 @@ func executeTool(ctx context.Context, call llmToolCall, article model.Article) (
 		}
 		b, _ := json.Marshal(out)
 		return string(b), buildEvidenceResult("local_search", query, artsToEvidence(arts))
+	case "news_search":
+		query, _ := call.Arguments["query"].(string)
+		timespan, _ := call.Arguments["timespan"].(string)
+		ticker, _ := call.Arguments["ticker"].(string)
+		maxRecords := 10
+		if v, ok := call.Arguments["max_records"].(float64); ok {
+			maxRecords = int(v)
+		}
+		res, err := news.Search(ctx, news.SearchRequest{
+			Query:      query,
+			Timespan:   timespan,
+			MaxRecords: maxRecords,
+			Ticker:     ticker,
+		})
+		if err != nil {
+			return toolError(err), nil
+		}
+		b, _ := json.Marshal(res)
+		return string(b), buildEvidenceResult("news_search", query, newsToEvidence(res.Items))
 	case "canonical_refs":
 		limit := 10
 		if v, ok := call.Arguments["limit"].(float64); ok {
@@ -215,6 +237,30 @@ func artsToEvidence(arts []model.Article) []skill.Evidence {
 			Source:  a.Title,
 			URL:     a.URL,
 			Excerpt: excerpt(a.Content, 160),
+		})
+	}
+	return res
+}
+
+func newsToEvidence(items []news.Item) []skill.Evidence {
+	res := make([]skill.Evidence, 0, len(items))
+	for i, it := range items {
+		if i >= 6 {
+			break
+		}
+		title := it.Title
+		if title == "" {
+			title = it.Source
+		}
+		ex := it.Snippet
+		if ex == "" && !it.PublishedAt.IsZero() {
+			ex = it.PublishedAt.UTC().Format(time.RFC3339)
+		}
+		res = append(res, skill.Evidence{
+			Type:    "news",
+			Source:  title,
+			URL:     it.URL,
+			Excerpt: ex,
 		})
 	}
 	return res
