@@ -103,6 +103,9 @@ export CF_BR_BASE_URL="https://api.cloudflare.com/client/v4"
 未配置时会自动回退到本地爬虫。
 
 ## API
+Chrome 插件（开发者模式加载）在这里：
+`tools/infoverify-chrome-extension`
+
 提交 URL 进入爬取队列：
 ```bash
 curl -X POST http://localhost:8080/api/basic/check \

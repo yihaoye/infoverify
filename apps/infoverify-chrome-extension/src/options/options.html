@@ -1,0 +1,76 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>InfoVerify Options</title>
+    <style>
+      body {
+        font: 14px/1.5 system-ui, -apple-system, Segoe UI, Roboto, Helvetica,
+          Arial;
+        padding: 16px;
+        max-width: 640px;
+        margin: 0 auto;
+      }
+      label {
+        display: block;
+        margin-bottom: 6px;
+        font-weight: 600;
+      }
+      input {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid #ddd;
+      }
+      .row {
+        margin-bottom: 14px;
+      }
+      .hint {
+        color: #666;
+        font-size: 12px;
+        margin-top: 6px;
+      }
+      button {
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid #ddd;
+        background: #111;
+        color: #fff;
+        cursor: pointer;
+      }
+      .ok {
+        margin-left: 10px;
+        color: #0a7;
+        font-size: 12px;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>InfoVerify (Mock) 设置</h1>
+
+    <div class="row">
+      <label for="apiBaseUrl">后端 API Base URL</label>
+      <input id="apiBaseUrl" placeholder="http://localhost:8080" />
+      <div class="hint">用于调用 `POST /api/basic/score`。</div>
+    </div>
+
+    <div class="row">
+      <label>
+        <input id="enableLLM" type="checkbox" />
+        启用 Gemini 可信度评估
+      </label>
+      <div class="hint">会在请求体附带 `llm=true`；需要后端配置 `GEMINI_API_KEY`。</div>
+    </div>
+
+    <div class="row">
+      <label for="delay">Mock 延迟 (ms)</label>
+      <input id="delay" inputmode="numeric" placeholder="700" />
+      <div class="hint">可选：用于模拟网络耗时（0 表示不延迟）。</div>
+    </div>
+
+    <button id="save">保存</button><span class="ok" id="ok"></span>
+
+    <script src="./options.js"></script>
+  </body>
+</html>

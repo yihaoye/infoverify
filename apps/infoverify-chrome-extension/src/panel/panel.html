@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>InfoVerify</title>
+    <link rel="stylesheet" href="./panel.css" />
+  </head>
+  <body>
+    <header class="header">
+      <div class="title">InfoVerify (Mock)</div>
+      <div class="subtitle">选中文本则核实文本；否则核实当前页 URL</div>
+    </header>
+
+    <main class="main">
+      <section class="card" id="statusCard">
+        <div class="cardTitle">状态</div>
+        <div class="status" id="status">等待触发核实…</div>
+      </section>
+
+      <section class="card">
+        <div class="cardTitle">结论</div>
+        <div class="verdictRow">
+          <span class="pill" id="verdictPill">—</span>
+          <span class="confidence" id="confidence">—</span>
+        </div>
+        <div class="summary" id="summary">—</div>
+      </section>
+
+      <section class="card">
+        <div class="cardTitle">证据</div>
+        <div class="evidence" id="evidence"></div>
+      </section>
+
+      <section class="card">
+        <div class="cardTitle">LLM 评估（Gemini，可选）</div>
+        <div class="verdictRow">
+          <span class="pill" id="llmVerdictPill">—</span>
+          <span class="confidence" id="llmConfidence">—</span>
+        </div>
+        <div class="summary" id="llmRationale">—</div>
+      </section>
+
+      <section class="card">
+        <div class="cardTitle">详情 (JSON)</div>
+        <pre class="json" id="raw">—</pre>
+      </section>
+    </main>
+
+    <script src="./panel.js"></script>
+  </body>
+</html>
