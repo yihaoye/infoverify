@@ -1,14 +1,5 @@
 
 services:
-  redis:
-    image: redis:latest
-    container_name: redis
-    ports:
-      - "6379:6379" # 映射本地 6379 端口到容器内
-    volumes:
-      - redis_data:/data # 持久化 Redis 数据
-    command: ["redis-server", "--appendonly", "yes"] # 开启持久化（AOF 模式）
-
   postgres:
     image: postgres:16
     container_name: postgres
@@ -21,6 +12,31 @@ services:
     volumes:
       - pg_data:/var/lib/postgresql/data
 
+  pgadmin:
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@admin.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+
+  infoverify:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: infoverify
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GEMINI_MODEL=${GEMINI_MODEL}
+      - CROSS_VALIDATE_MODE=web
+    ports:
+      - "8080:8080"
+    depends_on:
+      - postgres
+    restart: unless-stopped
+
 volumes:
-  redis_data:
   pg_data:

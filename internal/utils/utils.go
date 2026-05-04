@@ -1,13 +1,17 @@
 package utils
 
 import (
-	"strconv"
-
-	"github.com/cespare/xxhash/v2"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
 )
 
-// 使用 xxhash 对输入进行均匀哈希计算，然后对 100 进行取模来实现百分比分流
-func HashMod(id int64) int32 {
-	hash := xxhash.Sum64([]byte(strconv.FormatInt(id, 10)))
-	return int32(hash % 100)
+func CacheKey(input string) string {
+	h := sha256.Sum256([]byte(input))
+	return fmt.Sprintf("%x", h)
+}
+
+func IDFromURL(url string) string {
+	hash := sha256.Sum256([]byte(url))
+	return hex.EncodeToString(hash[:])
 }

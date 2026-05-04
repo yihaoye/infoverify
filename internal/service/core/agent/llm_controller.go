@@ -16,7 +16,6 @@ import (
 	"github.com/yihaoye/infoverify/internal/service/support/canonical"
 	"github.com/yihaoye/infoverify/internal/service/support/external"
 	"github.com/yihaoye/infoverify/internal/service/support/news"
-	"github.com/yihaoye/infoverify/internal/service/support/search"
 )
 
 const maxLLMSteps = 4
@@ -44,7 +43,6 @@ func RunLLMController(ctx context.Context, article model.Article) (skill.Report,
 
 	decls := []clients.GeminiFuncDecl{
 		// MVP 工具集合。
-		{Name: "search_articles", Description: "Search local articles by query", Parameters: map[string]interface{}{"type": "object", "properties": map[string]interface{}{"query": map[string]interface{}{"type": "string"}, "limit": map[string]interface{}{"type": "integer"}}, "required": []string{"query"}}},
 		{Name: "news_search", Description: "Search recent US-market news links (free sources: GDELT; optional SEC filings when ticker is provided)", Parameters: map[string]interface{}{"type": "object", "properties": map[string]interface{}{"query": map[string]interface{}{"type": "string"}, "timespan": map[string]interface{}{"type": "string", "description": "GDELT timespan like 24h, 1d, 7d"}, "max_records": map[string]interface{}{"type": "integer"}, "ticker": map[string]interface{}{"type": "string", "description": "Optional US stock ticker (e.g., AAPL) to include SEC filings"}}, "required": []string{"query"}}},
 		{Name: "canonical_refs", Description: "Lookup canonical references by domain or keyword (physics, mathematics, chemistry, medicine, biology)", Parameters: map[string]interface{}{"type": "object", "properties": map[string]interface{}{"domain": map[string]interface{}{"type": "string"}, "keyword": map[string]interface{}{"type": "string"}, "limit": map[string]interface{}{"type": "integer"}}}},
 		{Name: "fetch_url", Description: "Fetch and extract content from a URL (allowlist enforced)", Parameters: map[string]interface{}{"type": "object", "properties": map[string]interface{}{"url": map[string]interface{}{"type": "string"}}, "required": []string{"url"}}},
@@ -134,22 +132,6 @@ func RunLLMController(ctx context.Context, article model.Article) (skill.Report,
 func executeTool(ctx context.Context, call llmToolCall, article model.Article) (string, *skill.Result) {
 	// 工具分发：返回序列化结果和证据结构。
 	switch call.Name {
-	case "search_articles":
-		query, _ := call.Arguments["query"].(string)
-		limit := 10
-		if v, ok := call.Arguments["limit"].(float64); ok {
-			limit = int(v)
-		}
-		arts, err := search.SearchArticles(ctx, query, limit)
-		if err != nil {
-			return toolError(err), nil
-		}
-		out := map[string]interface{}{
-			"count": len(arts),
-			"items": arts,
-		}
-		b, _ := json.Marshal(out)
-		return string(b), buildEvidenceResult("local_search", query, artsToEvidence(arts))
 	case "news_search":
 		query, _ := call.Arguments["query"].(string)
 		timespan, _ := call.Arguments["timespan"].(string)
@@ -223,23 +205,6 @@ func buildEvidenceResult(source, summary string, evidence []skill.Evidence) *ski
 		Summary:  source + ": " + summary,
 		Evidence: evidence,
 	}
-}
-
-func artsToEvidence(arts []model.Article) []skill.Evidence {
-	// 只取前 3 条作为证据摘要，避免噪音过大。
-	res := make([]skill.Evidence, 0, len(arts))
-	for i, a := range arts {
-		if i >= 3 {
-			break
-		}
-		res = append(res, skill.Evidence{
-			Type:    "local",
-			Source:  a.Title,
-			URL:     a.URL,
-			Excerpt: excerpt(a.Content, 160),
-		})
-	}
-	return res
 }
 
 func newsToEvidence(items []news.Item) []skill.Evidence {

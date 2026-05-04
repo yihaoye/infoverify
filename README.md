@@ -18,47 +18,46 @@
 提供链接，爬文章数据来推理并开一个新 tab（结论链接）来给出答案，移动客户端则可以使用分享给系统的客户端，然后客户端会有记录（包含原文与结论）。  
 
 ## 运行
+在项目根路径下创建 `.env` 文件，配置必要的环境变量（如数据库连接、Gemini API key 等）。
+```
+GEMINI_API_KEY=your_key
+GEMINI_MODEL=gemini-2.5-flash
+DATABASE_URL=postgres://postgres:postgres@postgres:5432/infoverify?sslmode=disable
+```  
+
+然后即可运行：  
 `docker-compose up -d`  
 
-启动 HTTP API 服务（默认监听 `:8080`）：
-```bash
-go run ./cmd/infoverify -mode server
-```
-
-说明：
-- 只用轻量打分接口 `/api/basic/score` 时，不强依赖 Postgres/Redis（未启动也能跑，但相关接口会不可用）。
-- 如需使用 `/api/basic/check`（URL 入队抓取/分析）、`/api/basic/get`、`/api/basic/search`、任务接口等，请先运行 `docker-compose up -d` 启动 Postgres/Redis。
-
-可选：启动后台 worker（用于处理 `/api/basic/check` 提交的 URL 抓取与分析队列）：
-```bash
-go run ./cmd/infoverify -mode worker
-```
+这将启动完整的栈：
+- Postgres 数据库
+- pgAdmin（数据库管理界面，访问 http://localhost:5050）
+- infoverify API 服务（监听 :8080）
 
 ## 停止
 `docker-compose down`
 
-## 迁移
-最小表结构脚本：
-`internal/dal/postgres/migrations/20260310_0900_create_articles_reports.sql`
-
-当前完整表结构：
-`internal/dal/postgres/schema.sql`
-
-生成/更新 schema 文件（需安装 `pg_dump`）：
+## 不使用 Docker 运行
+或者仅启动 HTTP API 服务：
 ```bash
-./scripts/gen_schema.sh
+go run ./cmd/infoverify -mode server
+# 需要先启动 Postgres，并设置环境变量如下所示
 ```
 
-快速应用（本地默认配置）：
-```bash
-psql "postgres://postgres:postgres@localhost:5432/infoverify?sslmode=disable" -f internal/dal/postgres/migrations/20260310_0900_create_articles_reports.sql
-```
-
-## 数据库
+### 数据库
 默认使用 Postgres（`DATABASE_URL` 可覆盖）：
 `postgres://postgres:postgres@localhost:5432/infoverify?sslmode=disable`
 
-## Gemini
+pgAdmin（本地可视化）  
+docker-compose up -d 后访问 http://localhost:5050，使用 admin@admin.com / admin 登录。  
+首次使用需手动注册服务器：左侧右键 Servers → Register → Server，Connection 填写：
+```
+Host: postgres
+Port: 5432
+Database: infoverify
+Username / Password: postgres / postgres
+```
+
+### Gemini
 LLM 作为总控调度器（需要配置 key）：
 ```bash
 export GEMINI_API_KEY="your_key"
@@ -67,7 +66,7 @@ export GEMINI_BASE_URL="https://generativelanguage.googleapis.com/v1beta"
 ```
 未配置 `GEMINI_API_KEY` 时，分析会返回错误。
 
-## 交叉验证模式
+### 交叉验证模式
 默认只使用本地检索，不触发网络抓取：
 ```bash
 export CROSS_VALIDATE_MODE="local"
@@ -77,12 +76,18 @@ export CROSS_VALIDATE_MODE="local"
 export CROSS_VALIDATE_MODE="web"
 ```
 
+### 说明
+- 只用轻量打分接口 `/api/basic/score` 时，不强依赖 Postgres（未启动也能跑，但相关接口会不可用）。
+- 目前没有 Worker 模式（异步任务队列），后续如果加了再更新文档。
+
 ## 工具（MVP）
 默认提供以下工具：
-- 本地检索（`search_articles`）
 - 新闻检索（`news_search`，免费源：GDELT；可选 SEC filings，需要设置 `SEC_USER_AGENT`）
+  - 学术检索（`scholar_search`，免费源：Semantic Scholar）
 - Canonical refs（`canonical_refs`，物理/数学/化学/医学/生物）
+  - 本地检索（`search_articles`）不需要存经典论文或知识库，直接调用大模型因为模型已经经过这些经典知识训练融入参数中，唯一需要的是把相关文章论文名记录在数据库中按针对验证的信息标签来调用并作为提示词询问大模型（如果大模型没有用相关文章论文训练过则需要微调）。
 - URL 抓取（`fetch_url`，受 allowlist 限制，见 `internal/service/support/external/allowlist.go`）
+
 TODO：后续再接入财经数据源抓取与结构化（如 SEC、Yahoo、Bloomberg）。
 
 ### SEC_USER_AGENT
@@ -102,25 +107,11 @@ export CF_BR_BASE_URL="https://api.cloudflare.com/client/v4"
 ```
 未配置时会自动回退到本地爬虫。
 
-## API
+## 客户端
 Chrome 插件（开发者模式加载）在这里：
-`tools/infoverify-chrome-extension`
+`apps/infoverify-chrome-extension`
 
-提交 URL 进入爬取队列：
-```bash
-curl -X POST http://localhost:8080/api/basic/check \
-  -H "Content-Type: application/json" \
-  -d '{"url":"https://example.com/article"}'
-```
-
-直接提交文章内容进入索引：
-```bash
-curl -X POST http://localhost:8080/api/basic/check \
-  -H "Content-Type: application/json" \
-  -d '{"article":{"title":"t","author":"a","content":"c"}}'
-```
-
-轻量打分（不入库、不抓取）：输入文本 → 三大原则分项分数 + 总分：
+轻量打分（不入库、不抓取）：输入文本 -> 三大原则分项分数 + 总分：
 ```bash
 curl -X POST http://localhost:8080/api/basic/score \
   -H "Content-Type: application/json" \
@@ -141,18 +132,6 @@ curl -X POST http://localhost:8080/api/basic/score \
   -d '{"text":"...","llm":true}'
 ```
 需要先配置 `GEMINI_API_KEY`（见上面的 Gemini 配置段落）。
-
-获取已索引内容：
-```bash
-curl "http://localhost:8080/api/basic/get?id=<article_id>"
-```
-
-Browser Rendering 健康检查（可选）：
-```bash
-curl "http://localhost:8080/api/basic/tools/browser_rendering/health"
-curl "http://localhost:8080/api/basic/tools/browser_rendering/health?url=https://example.com"
-```
-返回示例字段：`status`、`configured`、`elapsed_ms`、`title`、`content_len`、`preview`。
 
 ## Milestone
 * [ ] Article

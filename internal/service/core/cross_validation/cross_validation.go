@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/yihaoye/infoverify/internal/service/core/skill"
-	"github.com/yihaoye/infoverify/internal/service/support/search"
 	"github.com/yihaoye/infoverify/internal/service/support/web_crawler"
 )
 
@@ -19,10 +18,10 @@ func (Skill) Name() string    { return "cross_validation" }
 func (Skill) Weight() float64 { return 0.3 }
 
 func (Skill) Evaluate(ctx context.Context, in skill.Input) (skill.Result, error) {
-	// 交叉验证：local 走本地检索，web 仅复抓原 URL。
+	// 交叉验证：仅支持 web 模式（复抓原 URL）。
 	mode := strings.ToLower(strings.TrimSpace(os.Getenv("CROSS_VALIDATE_MODE")))
 	if mode == "" {
-		mode = "local"
+		mode = "web"
 	}
 
 	result := skill.Result{
@@ -31,24 +30,6 @@ func (Skill) Evaluate(ctx context.Context, in skill.Input) (skill.Result, error)
 	}
 
 	switch mode {
-	case "local":
-		// 用标题或正文片段进行本地检索。
-		query := buildQuery(in.Article.Title, in.Article.Content)
-		articles, err := search.SearchArticles(ctx, query, 5)
-		if err != nil {
-			result.Score = 0
-			result.Summary = "local search failed"
-			return result, nil
-		}
-		count := len(articles)
-		result.Score = scoreByCount(count)
-		result.Summary = fmt.Sprintf("local hits=%d", count)
-		if count > 0 {
-			result.Evidence = []skill.Evidence{
-				{Type: "metric", Source: "local_hits", Excerpt: fmt.Sprintf("%d", count)},
-			}
-		}
-		return result, nil
 	case "web":
 		// 仅复抓原 URL 做一致性检查。
 		if in.Article.URL == "" {
@@ -85,18 +66,6 @@ func (Skill) Evaluate(ctx context.Context, in skill.Input) (skill.Result, error)
 		result.Summary = "invalid CROSS_VALIDATE_MODE"
 		return result, nil
 	}
-}
-
-func buildQuery(title, content string) string {
-	title = strings.TrimSpace(title)
-	if title != "" {
-		return title
-	}
-	content = strings.TrimSpace(content)
-	if len(content) > 200 {
-		content = content[:200]
-	}
-	return content
 }
 
 func scoreByCount(count int) float64 {

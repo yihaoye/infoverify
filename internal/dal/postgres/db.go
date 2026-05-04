@@ -46,19 +46,12 @@ func Stop() {
 
 func initSchema(db *sql.DB) error {
 	ddl := `
-CREATE TABLE IF NOT EXISTS articles (
-  id TEXT PRIMARY KEY,
-  url TEXT,
-  title TEXT NOT NULL,
-  author TEXT,
-  content TEXT NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
-);
-
-CREATE TABLE IF NOT EXISTS reports (
-  article_id TEXT PRIMARY KEY REFERENCES articles(id) ON DELETE CASCADE,
-  report JSONB NOT NULL,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+CREATE TABLE cache (
+  key        TEXT PRIMARY KEY,        -- SHA256(url or text)
+  type       TEXT NOT NULL,           -- 'url' | 'text'
+  result     JSONB NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 `
 	if _, err := db.Exec(ddl); err != nil {
