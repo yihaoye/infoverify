@@ -46,7 +46,7 @@ func Stop() {
 
 func initSchema(db *sql.DB) error {
 	ddl := `
-CREATE TABLE cache (
+CREATE TABLE IF NOT EXISTS cache (
   key        TEXT PRIMARY KEY,        -- SHA256(url or text)
   type       TEXT NOT NULL,           -- 'url' | 'text'
   result     JSONB NOT NULL,

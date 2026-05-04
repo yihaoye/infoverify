@@ -26,6 +26,7 @@ DATABASE_URL=postgres://postgres:postgres@postgres:5432/infoverify?sslmode=disab
 ```  
 
 然后即可运行：  
+`docker-compose build --no-cache infoverify`  
 `docker-compose up -d`  
 
 这将启动完整的栈：
@@ -36,20 +37,10 @@ DATABASE_URL=postgres://postgres:postgres@postgres:5432/infoverify?sslmode=disab
 ## 停止
 `docker-compose down`
 
-## 不使用 Docker 运行
-或者仅启动 HTTP API 服务：
-```bash
-go run ./cmd/infoverify -mode server
-# 需要先启动 Postgres，并设置环境变量如下所示
-```
-
-### 数据库
-默认使用 Postgres（`DATABASE_URL` 可覆盖）：
-`postgres://postgres:postgres@localhost:5432/infoverify?sslmode=disable`
-
+## 数据库
 pgAdmin（本地可视化）  
 docker-compose up -d 后访问 http://localhost:5050，使用 admin@admin.com / admin 登录。  
-首次使用需手动注册服务器：左侧右键 Servers → Register → Server，Connection 填写：
+首次使用需手动注册服务器：左侧右键 Servers -> Register -> Server，Connection 填写：
 ```
 Host: postgres
 Port: 5432
@@ -57,16 +48,7 @@ Database: infoverify
 Username / Password: postgres / postgres
 ```
 
-### Gemini
-LLM 作为总控调度器（需要配置 key）：
-```bash
-export GEMINI_API_KEY="your_key"
-export GEMINI_MODEL="gemini-2.5-flash"
-export GEMINI_BASE_URL="https://generativelanguage.googleapis.com/v1beta"
-```
-未配置 `GEMINI_API_KEY` 时，分析会返回错误。
-
-### 交叉验证模式
+## 交叉验证模式
 默认只使用本地检索，不触发网络抓取：
 ```bash
 export CROSS_VALIDATE_MODE="local"
@@ -76,7 +58,7 @@ export CROSS_VALIDATE_MODE="local"
 export CROSS_VALIDATE_MODE="web"
 ```
 
-### 说明
+## API
 - 只用轻量打分接口 `/api/basic/score` 时，不强依赖 Postgres（未启动也能跑，但相关接口会不可用）。
 - 目前没有 Worker 模式（异步任务队列），后续如果加了再更新文档。
 
