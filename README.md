@@ -67,7 +67,7 @@ export CROSS_VALIDATE_MODE="web"
 - 新闻检索（`news_search`，免费源：GDELT；可选 SEC filings，需要设置 `SEC_USER_AGENT`）
   - 学术检索（`scholar_search`，免费源：Semantic Scholar）
 - Canonical refs（`canonical_refs`，物理/数学/化学/医学/生物）
-  - 本地检索（`search_articles`）不需要存经典论文或知识库，直接调用大模型因为模型已经经过这些经典知识训练融入参数中，唯一需要的是把相关文章论文名记录在数据库中按针对验证的信息标签来调用并作为提示词询问大模型（如果大模型没有用相关文章论文训练过则需要微调）。
+  - 本地检索（`search_articles`）不需要存经典论文或知识库，直接调用大模型因为模型已经经过这些经典知识训练融入参数中，唯一需要的是把相关文章论文名记录在数据库（甚至不用数据库，直接在代码里写死哈希表，映射标签与关键知识的关系）中按针对验证的信息标签来调用并作为提示词询问大模型（如果大模型没有用相关文章论文训练过则需要微调）。
 - URL 抓取（`fetch_url`，受 allowlist 限制，见 `internal/service/support/external/allowlist.go`）
 
 TODO：后续再接入财经数据源抓取与结构化（如 SEC、Yahoo、Bloomberg）。
