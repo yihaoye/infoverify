@@ -8,14 +8,29 @@
   </head>
   <body>
     <header class="header">
-      <div class="title">InfoVerify (Mock)</div>
+      <div class="title">InfoVerify</div>
       <div class="subtitle">选中文本则核实文本；否则核实当前页 URL</div>
     </header>
 
     <main class="main">
+      <section class="thinkingBanner" id="thinkingBanner" aria-live="polite">
+        <div class="thinkingGlow"></div>
+        <div class="thinkingContent">
+          <div class="thinkingLabel">Thinking</div>
+          <div class="thinkingText" id="thinkingText">正在推理...</div>
+        </div>
+        <div class="thinkingBars" aria-hidden="true">
+          <span></span>
+          <span></span>
+          <span></span>
+        </div>
+      </section>
+
       <section class="card" id="statusCard">
         <div class="cardTitle">状态</div>
-        <div class="status" id="status">等待触发核实…</div>
+        <div class="statusRow">
+          <div class="status" id="status">等待触发核实…</div>
+        </div>
       </section>
 
       <section class="card">
@@ -39,11 +54,6 @@
           <span class="confidence" id="llmConfidence">—</span>
         </div>
         <div class="summary" id="llmRationale">—</div>
-      </section>
-
-      <section class="card">
-        <div class="cardTitle">详情 (JSON)</div>
-        <pre class="json" id="raw">—</pre>
       </section>
     </main>
 

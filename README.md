@@ -17,7 +17,7 @@
 
 提供链接，爬文章数据来推理并开一个新 tab（结论链接）来给出答案，移动客户端则可以使用分享给系统的客户端，然后客户端会有记录（包含原文与结论）。  
 
-## 运行
+## 运行服务
 在项目根路径下创建 `.env` 文件，配置必要的环境变量（如数据库连接、Gemini API key 等）。
 ```
 GEMINI_API_KEY=your_key
@@ -34,7 +34,18 @@ DATABASE_URL=postgres://postgres:postgres@postgres:5432/infoverify?sslmode=disab
 - pgAdmin（数据库管理界面，访问 http://localhost:5050）
 - infoverify API 服务（监听 :8080）
 
-## 停止
+### 上线（临时公网访问 cloudflared 内网穿透）
+让 Chrome 插件通过一个临时公网域名访问本地后端，可以使用 `cloudflared`：
+
+1. 启动本地服务：`docker-compose up -d`
+2. `cloudflared tunnel create infoverify` （只需执行一次，创建后会生成一个 `infoverify` 的 tunnel 配置文件）
+3. `cloudflared tunnel route dns infoverify infoverify.dpdns.org` （只需执行一次，将 `infoverify` tunnel 绑定到一个子域名上，这里使用 `infoverify.dpdns.org`，需要先在 DNS 提供商处添加对应的 CNAME 记录）
+4. 运行内网穿透：`cloudflared tunnel run --url http://localhost:8080 infoverify`
+5. Chrome 插件即可通过域名 `infoverify.dpdns.org` 访问本地后端服务
+
+> 该方案适合 MVP 开发和测试，通常会在本地后端服务停止运行或 `cloudflared` 会话结束后失效。
+
+## 停止服务
 `docker-compose down`
 
 ## 数据库

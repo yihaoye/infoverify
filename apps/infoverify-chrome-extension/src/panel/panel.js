@@ -1,15 +1,68 @@
 const statusEl = document.getElementById("status");
+const thinkingBannerEl = document.getElementById("thinkingBanner");
+const thinkingTextEl = document.getElementById("thinkingText");
 const verdictPillEl = document.getElementById("verdictPill");
 const confidenceEl = document.getElementById("confidence");
 const summaryEl = document.getElementById("summary");
 const evidenceEl = document.getElementById("evidence");
-const rawEl = document.getElementById("raw");
 const llmVerdictPillEl = document.getElementById("llmVerdictPill");
 const llmConfidenceEl = document.getElementById("llmConfidence");
 const llmRationaleEl = document.getElementById("llmRationale");
+let loadingStartAt = 0;
+let loadingHideTimer = 0;
+const minLoadingMs = 700;
 
 function setStatus(text) {
   statusEl.textContent = text;
+}
+
+function setLoading(loading) {
+  if (loading) {
+    if (loadingHideTimer) {
+      window.clearTimeout(loadingHideTimer);
+      loadingHideTimer = 0;
+    }
+    loadingStartAt = performance.now();
+    thinkingBannerEl.classList.add("active");
+    statusEl.classList.add("thinking");
+    statusEl.textContent = "正在推理";
+    thinkingTextEl.textContent = "正在分析文本、抓取证据并生成结论";
+  } else {
+    const elapsed = performance.now() - loadingStartAt;
+    const remaining = Math.max(0, minLoadingMs - elapsed);
+    loadingHideTimer = window.setTimeout(() => {
+      thinkingBannerEl.classList.remove("active");
+      statusEl.classList.remove("thinking");
+      thinkingTextEl.textContent = "已完成";
+      loadingHideTimer = 0;
+    }, remaining);
+  }
+}
+
+async function hydrateInitialState() {
+  const { currentVerification } = await chrome.storage.session.get({
+    currentVerification: null
+  });
+
+  if (currentVerification?.state === "loading") {
+    setLoading(true);
+    setStatus("正在推理");
+    summaryEl.textContent = "—";
+    setVerdict("—");
+    renderEvidence([]);
+    setLLMAssessment(null);
+    return;
+  }
+
+  if (currentVerification?.state === "done" && currentVerification.result) {
+    const payload = currentVerification.result;
+    setLoading(false);
+    setStatus("已完成");
+    setVerdict(payload.verdict, payload.confidence);
+    summaryEl.textContent = payload.summary || "—";
+    renderEvidence(payload.evidence);
+    setLLMAssessment(payload.backend?.llm_assessment || payload.llm_assessment);
+  }
 }
 
 function setVerdict(verdict, confidence) {
@@ -72,21 +125,23 @@ chrome.runtime.onMessage.addListener((message) => {
   if (!message || typeof message !== "object") return;
 
   if (message.type === "VERIFY_STARTED") {
-    setStatus("正在核实（Mock）…");
+    setLoading(true);
+    setStatus("正在推理");
     summaryEl.textContent = "—";
     setVerdict("—");
     renderEvidence([]);
     setLLMAssessment(null);
-    rawEl.textContent = "—";
   }
 
   if (message.type === "VERIFY_RESULT") {
+    setLoading(false);
     setStatus("已完成");
     const payload = message.payload || {};
     setVerdict(payload.verdict, payload.confidence);
     summaryEl.textContent = payload.summary || "—";
     renderEvidence(payload.evidence);
     setLLMAssessment(payload.backend?.llm_assessment || payload.llm_assessment);
-    rawEl.textContent = JSON.stringify(payload, null, 2);
   }
 });
+
+hydrateInitialState().catch(() => {});

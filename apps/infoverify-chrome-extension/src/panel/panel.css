@@ -48,6 +48,110 @@ body {
   gap: 10px;
 }
 
+.thinkingBanner {
+  position: relative;
+  overflow: hidden;
+  display: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(135deg, rgba(47, 59, 121, 0.92), rgba(17, 24, 49, 0.96));
+  box-shadow:
+    0 12px 30px rgba(0, 0, 0, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.thinkingBanner.active {
+  display: flex;
+}
+
+.thinkingGlow {
+  position: absolute;
+  inset: auto -30px -40px auto;
+  width: 120px;
+  height: 120px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(45, 212, 191, 0.22), transparent 68%);
+  filter: blur(10px);
+  animation: pulseGlow 1.8s ease-in-out infinite;
+}
+
+.thinkingContent {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 3px;
+}
+
+.thinkingLabel {
+  color: var(--warn);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+}
+
+.thinkingText {
+  font-size: 14px;
+  color: var(--text);
+  font-weight: 600;
+}
+
+.thinkingBars {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: end;
+  gap: 4px;
+  min-width: 40px;
+}
+
+.thinkingBars span {
+  width: 5px;
+  height: 18px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, var(--text), rgba(255, 255, 255, 0.24));
+  animation: barBounce 1s ease-in-out infinite;
+}
+
+.thinkingBars span:nth-child(2) {
+  animation-delay: 0.16s;
+  height: 24px;
+}
+
+.thinkingBars span:nth-child(3) {
+  animation-delay: 0.32s;
+  height: 14px;
+}
+
+@keyframes barBounce {
+  0%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translateY(-7px);
+    opacity: 1;
+  }
+}
+
+@keyframes pulseGlow {
+  0%,
+  100% {
+    transform: scale(0.92);
+    opacity: 0.7;
+  }
+  50% {
+    transform: scale(1.03);
+    opacity: 1;
+  }
+}
+
 .card {
   background: rgba(18, 26, 51, 0.78);
   border: 1px solid var(--border);
@@ -62,8 +166,22 @@ body {
   margin-bottom: 8px;
 }
 
+.statusRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 34px;
+}
+
 .status {
   color: var(--text);
+  font-size: 13px;
+  letter-spacing: 0.01em;
+}
+
+.status.thinking::after {
+  content: " ...";
+  color: var(--muted);
 }
 
 .verdictRow {

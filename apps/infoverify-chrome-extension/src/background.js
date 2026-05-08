@@ -3,7 +3,7 @@ const MENU_ID_VERIFY = "infoverify.verifySelection";
 chrome.runtime.onInstalled.addListener(async () => {
   chrome.contextMenus.create({
     id: MENU_ID_VERIFY,
-    title: "核实 (文本优先/否则URL)",
+    title: "核实选中文本或当前页面",
     contexts: ["selection", "page"]
   });
 
@@ -32,9 +32,27 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const selectionText = info.selectionText?.trim() || "";
   const url = tab.url || "";
 
+  await chrome.storage.session.set({
+    currentVerification: {
+      state: "loading",
+      selectionText,
+      url,
+      startedAt: Date.now()
+    }
+  });
+
   broadcastToTab(tab.id, { type: "VERIFY_STARTED", payload: { selectionText, url } });
 
   const result = await verifyViaBackend({ selectionText, url });
+  await chrome.storage.session.set({
+    currentVerification: {
+      state: "done",
+      selectionText,
+      url,
+      finishedAt: Date.now(),
+      result
+    }
+  });
   broadcastToTab(tab.id, { type: "VERIFY_RESULT", payload: result });
 });
 
@@ -44,15 +62,15 @@ function broadcastToTab(tabId, message) {
 }
 
 async function verifyViaBackend({ selectionText, url }) {
-  const { apiBaseUrl, mockDelayMs, enableLLMAssessment } = await chrome.storage.sync.get({
+  const { apiBaseUrl, requestDelayMs, enableLLMAssessment } = await chrome.storage.sync.get({
     apiBaseUrl: "http://localhost:8080",
-    mockDelayMs: 0,
+    requestDelayMs: 0,
     enableLLMAssessment: false
   });
 
   // Optional artificial delay for UI testing.
-  if (Number(mockDelayMs) > 0) {
-    await new Promise((r) => setTimeout(r, Number(mockDelayMs) || 0));
+  if (Number(requestDelayMs) > 0) {
+    await new Promise((r) => setTimeout(r, Number(requestDelayMs) || 0));
   }
 
   const endpoint = `${String(apiBaseUrl).replace(/\/$/, "")}/api/basic/score`;
@@ -86,7 +104,7 @@ async function verifyViaBackend({ selectionText, url }) {
       selectionText,
       url,
       capturedAt,
-      message: `无法连接后端：${String(e?.message || e)}（确认已启动：go run ./cmd/infoverify -mode server）`
+      message: `无法连接后端：${String(e?.message || e)}`
     });
   }
 }

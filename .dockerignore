@@ -1,0 +1,16 @@
+# Ignore git metadata and logs
+.git
+.gitignore
+*.md
+*.log
+
+# Ignore local development and tooling files
+docker-compose.yaml
+.vscode
+
+# Ignore node_modules or other build artifacts
+**/node_modules
+apps
+
+tmp
+*.tmp

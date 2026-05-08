@@ -1,4 +1,4 @@
-# InfoVerify (Mock) — Chrome 扩展骨架
+# InfoVerify — Chrome 扩展骨架
 
 ## 功能
 - 在网页上右键 → `核实 (文本优先/否则URL)`
@@ -32,4 +32,4 @@ go run ./cmd/infoverify -mode server
 
 ## 设置
 - 扩展详情页 →「扩展程序选项」
-- 可调整模拟延迟：`Mock 延迟 (ms)`（0 表示不延迟）
+- 可调整请求延迟：`请求延迟 (ms)`（0 表示不延迟）
