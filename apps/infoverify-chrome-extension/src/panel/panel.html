@@ -36,13 +36,6 @@
         </div>
       </section>
 
-      <section class="card" id="statusCard">
-        <div class="cardTitle">状态</div>
-        <div class="statusRow">
-          <div class="status" id="status">等待触发核实…</div>
-        </div>
-      </section>
-
       <section class="card">
         <div class="cardTitle">结论</div>
         <div class="verdictRow">
@@ -50,30 +43,6 @@
           <span class="confidence" id="confidence">—</span>
         </div>
         <div class="summary" id="summary">—</div>
-      </section>
-
-      <section class="card">
-        <div class="cardTitle">各指标评分</div>
-        <div class="principleList">
-          <div class="principleRow">
-            <div class="principleLabel">可重复性</div>
-            <div class="principleValue" id="reproScore">—</div>
-          </div>
-          <div class="principleRow">
-            <div class="principleLabel">交叉验证</div>
-            <div class="principleValue" id="crossScore">—</div>
-          </div>
-          <div class="principleRow">
-            <div class="principleLabel">内容具体性</div>
-            <div class="principleValue" id="detailScore">—</div>
-          </div>
-        </div>
-        <div class="summary principleNote" id="principleNote">—</div>
-      </section>
-
-      <section class="card">
-        <div class="cardTitle">证据</div>
-        <div class="evidence" id="evidence"></div>
       </section>
 
       <section class="card">
@@ -86,8 +55,35 @@
       </section>
 
       <section class="card">
-        <div class="cardTitle">GDELT 交叉验证</div>
+        <div class="cardTitle">可重复性</div>
+        <div class="principleRow">
+          <div class="principleLabel">得分</div>
+          <div class="principleValue" id="reproScore">—</div>
+        </div>
+        <div class="summary principleNote" id="reproSummary">—</div>
+      </section>
+
+      <section class="card">
+        <div class="cardTitle">交叉验证</div>
+        <div class="principleRow">
+          <div class="principleLabel">得分</div>
+          <div class="principleValue" id="crossScore">—</div>
+        </div>
+        <div class="summary principleNote" id="crossSummary">—</div>
+        <div class="sectionSubtitle">证据</div>
+        <div class="evidence" id="evidence"></div>
+        <div class="sectionSubtitle">GDELT 交叉验证</div>
         <div class="summary" id="gdeltSummary">—</div>
+        <div class="summary principleNote" id="principleNote">—</div>
+      </section>
+
+      <section class="card">
+        <div class="cardTitle">内容具体性</div>
+        <div class="principleRow">
+          <div class="principleLabel">得分</div>
+          <div class="principleValue" id="detailScore">—</div>
+        </div>
+        <div class="summary principleNote" id="detailSummary">—</div>
       </section>
 
       <section class="card debugCard" id="debugCard" hidden>

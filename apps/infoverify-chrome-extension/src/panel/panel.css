@@ -336,6 +336,12 @@ body {
   font-size: 12px;
 }
 
+.sectionSubtitle {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 12px 0 6px;
+}
+
 .evidence {
   display: grid;
   gap: 8px;

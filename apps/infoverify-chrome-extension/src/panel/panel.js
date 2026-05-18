@@ -8,6 +8,9 @@ const reproScoreEl = document.getElementById("reproScore");
 const crossScoreEl = document.getElementById("crossScore");
 const detailScoreEl = document.getElementById("detailScore");
 const principleNoteEl = document.getElementById("principleNote");
+const reproSummaryEl = document.getElementById("reproSummary");
+const crossSummaryEl = document.getElementById("crossSummary");
+const detailSummaryEl = document.getElementById("detailSummary");
 const evidenceEl = document.getElementById("evidence");
 const gdeltSummaryEl = document.getElementById("gdeltSummary");
 const llmVerdictPillEl = document.getElementById("llmVerdictPill");
@@ -114,6 +117,7 @@ function reportError(stage, error, context = {}) {
 }
 
 function setStatus(text) {
+  if (!statusEl) return;
   statusEl.textContent = text;
 }
 
@@ -291,8 +295,10 @@ function setLoading(loading) {
     }
     loadingStartAt = performance.now();
     thinkingBannerEl.classList.add("active");
-    statusEl.classList.add("thinking");
-    setStatus("正在调用本地 AI");
+    if (statusEl) {
+      statusEl.classList.add("thinking");
+      setStatus("正在调用本地 AI");
+    }
     thinkingTextEl.textContent = "正在分析文本、搜索 GDELT 新闻并生成本地结论";
     updateModeButtons();
     return;
@@ -302,7 +308,9 @@ function setLoading(loading) {
   const remaining = Math.max(0, minLoadingMs - elapsed);
   loadingHideTimer = window.setTimeout(() => {
     thinkingBannerEl.classList.remove("active");
-    statusEl.classList.remove("thinking");
+    if (statusEl) {
+      statusEl.classList.remove("thinking");
+    }
     thinkingTextEl.textContent = "已完成";
     loadingHideTimer = 0;
   }, remaining);
@@ -446,10 +454,11 @@ function renderRuleScores(ruleScores, ruleNotes, extraContext = {}) {
   crossScoreEl.textContent = formatScore(scores.cross_validation);
   detailScoreEl.textContent = formatScore(scores.detail_richness);
 
+  reproSummaryEl.textContent = extraContext.reproducibility || "—";
+  crossSummaryEl.textContent = extraContext.cross_validation || "—";
+  detailSummaryEl.textContent = extraContext.specificity || "—";
+
   const notes = [];
-  if (extraContext.specificity) notes.push(`具体性：${extraContext.specificity}`);
-  if (extraContext.cross_validation) notes.push(`交叉验证：${extraContext.cross_validation}`);
-  if (extraContext.reproducibility) notes.push(`可重复性：${extraContext.reproducibility}`);
   if (ruleNotes?.reproducibility) notes.push(`可重复性：${ruleNotes.reproducibility}`);
   if (ruleNotes?.cross_validation) notes.push(`交叉验证：${ruleNotes.cross_validation}`);
   if (ruleNotes?.detail_richness) notes.push(`内容具体性：${ruleNotes.detail_richness}`);
