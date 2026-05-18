@@ -13,6 +13,10 @@ const gdeltSummaryEl = document.getElementById("gdeltSummary");
 const llmVerdictPillEl = document.getElementById("llmVerdictPill");
 const llmConfidenceEl = document.getElementById("llmConfidence");
 const llmRationaleEl = document.getElementById("llmRationale");
+const debugCardEl = document.getElementById("debugCard");
+const debugTraceEl = document.getElementById("debugTrace");
+const debugStatusEl = document.getElementById("debugStatus");
+const debugCopyButtonEl = document.getElementById("debugCopyButton");
 const modePillEl = document.getElementById("modePill");
 const localModeButtonEl = document.getElementById("localModeButton");
 const cloudModeButtonEl = document.getElementById("cloudModeButton");
@@ -24,16 +28,253 @@ let activeRun = { id: "", mode: "", controller: null };
 let gdeltRequestChain = Promise.resolve();
 let gdeltLastRequestAt = 0;
 let mbfcDatasetPromise = null;
+let gdeltCooldownUntil = 0;
+let lastDebugTrace = "";
+const DEBUG_PREFIX = "[InfoVerify]";
 const minLoadingMs = 700;
 const gdeltMinIntervalMs = 5200;
 const gdeltCacheTtlMs = 15 * 60 * 1000;
+const gdeltCooldownMs = 2 * 60 * 1000;
+const minGdeltTermLength = 3;
+const SUPPORTED_OUTPUT_LANGUAGES = new Set(["en", "es", "ja", "zh"]);
+const SUPPORTED_MODEL_OUTPUT_LANGUAGES = new Set(["en", "es", "ja"]);
+const OUTPUT_LANGUAGE_LABELS = {
+  en: "English",
+  es: "Spanish",
+  ja: "Japanese",
+  zh: "Chinese"
+};
+const FALLBACK_TEXT = {
+  en: {
+    jsonFallback: "The local AI response could not be parsed as JSON, so deterministic scoring was used.",
+    noOutput: "The local AI returned no parsable output.",
+    analysisDone: "Local AI analysis completed."
+  },
+  es: {
+    jsonFallback: "La respuesta de la IA local no se pudo analizar como JSON, así que se usó una puntuación determinista.",
+    noOutput: "La IA local no devolvió una salida que se pudiera analizar.",
+    analysisDone: "El análisis de la IA local se completó."
+  },
+  ja: {
+    jsonFallback: "ローカル AI の応答を JSON として解析できなかったため、決定論的なスコアリングを使用しました。",
+    noOutput: "ローカル AI から解析可能な出力が返されませんでした。",
+    analysisDone: "ローカル AI の分析が完了しました。"
+  },
+  zh: {
+    jsonFallback: "由于本地 AI 的响应无法解析为 JSON，因此改用确定性评分。",
+    noOutput: "本地 AI 没有返回可解析的输出。",
+    analysisDone: "本地 AI 分析已完成。"
+  }
+};
 
 localModeButtonEl.addEventListener("click", () => {
   void requestRun();
 });
 
+debugCopyButtonEl.addEventListener("click", () => {
+  if (!lastDebugTrace) return;
+  void navigator.clipboard?.writeText?.(lastDebugTrace).then(() => {
+    debugStatusEl.textContent = "已复制到剪贴板";
+    window.setTimeout(() => {
+      if (debugStatusEl.textContent === "已复制到剪贴板") {
+        debugStatusEl.textContent = "—";
+      }
+    }, 1500);
+  }).catch(() => {
+    debugStatusEl.textContent = "复制失败，请手动全选后复制";
+  });
+});
+
+window.addEventListener("error", (event) => {
+  console.error(`${DEBUG_PREFIX} window error`, {
+    message: event.message,
+    filename: event.filename,
+    lineno: event.lineno,
+    colno: event.colno,
+    stack: event.error?.stack || "",
+    error: event.error || null
+  });
+});
+
+window.addEventListener("unhandledrejection", (event) => {
+  console.error(`${DEBUG_PREFIX} unhandled rejection`, {
+    reason: event.reason,
+    stack: event.reason?.stack || ""
+  });
+});
+
+function reportError(stage, error, context = {}) {
+  const message = error?.message || String(error || "Unknown error");
+  console.error(`${DEBUG_PREFIX} ${stage}`, {
+    message,
+    stack: error?.stack || "",
+    context,
+    error
+  });
+}
+
 function setStatus(text) {
   statusEl.textContent = text;
+}
+
+async function getPreferredOutputLanguage() {
+  const { outputLanguage = "auto" } = await chrome.storage.sync.get({
+    outputLanguage: "auto"
+  });
+  return resolveOutputLanguage(outputLanguage);
+}
+
+function resolveOutputLanguage(value) {
+  const normalized = String(value || "").toLowerCase();
+  if (SUPPORTED_OUTPUT_LANGUAGES.has(normalized)) return normalized;
+  const detected = String(navigator.language || navigator.languages?.[0] || "en").toLowerCase();
+  if (detected.startsWith("zh")) return "zh";
+  if (detected.startsWith("es")) return "es";
+  if (detected.startsWith("ja")) return "ja";
+  return "en";
+}
+
+function resolveModelOutputLanguage(value) {
+  const language = resolveOutputLanguage(value);
+  if (SUPPORTED_MODEL_OUTPUT_LANGUAGES.has(language)) return language;
+  return "en";
+}
+
+function getLanguageLabel(value) {
+  return OUTPUT_LANGUAGE_LABELS[resolveOutputLanguage(value)] || "English";
+}
+
+function fallbackLanguageText(value, key) {
+  const language = resolveOutputLanguage(value);
+  return FALLBACK_TEXT[language]?.[key] || FALLBACK_TEXT.en[key] || "";
+}
+
+function truncateForDebug(value, maxChars = 6000) {
+  const text = String(value || "");
+  return text.length > maxChars ? `${text.slice(0, maxChars)}\n…[truncated]` : text;
+}
+
+function buildDebugTrace(fields) {
+  return JSON.stringify(
+    {
+      stage: fields.stage || "unknown",
+      outputLanguage: fields.outputLanguage || "en",
+      modelOutputLanguage: fields.modelOutputLanguage || "en",
+      promptPreview: truncateForDebug(fields.prompt, 2500),
+      rawPreview: truncateForDebug(fields.raw, 3500),
+      parsedPreview: fields.parsed || null,
+      error: fields.error || "",
+      gdeltSummary: truncateForDebug(fields.gdeltSummary, 1200),
+      gdeltRawPreview: truncateForDebug(fields.gdeltRawPreview, 1200),
+      mbfc: fields.mbfc || null
+    },
+    null,
+    2
+  );
+}
+
+function setDebugTrace(trace) {
+  lastDebugTrace = String(trace || "");
+  if (!lastDebugTrace) {
+    debugCardEl.hidden = true;
+    debugTraceEl.textContent = "";
+    debugStatusEl.textContent = "—";
+    return;
+  }
+
+  debugCardEl.hidden = false;
+  debugTraceEl.textContent = lastDebugTrace;
+  debugStatusEl.textContent = "可复制后贴给我排查";
+}
+
+let translatorCache = new Map();
+
+async function getTranslator(sourceLanguage, targetLanguage, signal) {
+  const key = `${sourceLanguage}->${targetLanguage}`;
+  if (translatorCache.has(key)) return translatorCache.get(key);
+
+  const api = globalThis.Translator;
+  if (!api) return null;
+
+  try {
+    const availability = await api.availability({ sourceLanguage, targetLanguage });
+    if (availability === "unavailable") return null;
+
+    const translator = await api.create({
+      sourceLanguage,
+      targetLanguage
+    });
+    translatorCache.set(key, translator);
+    return translator;
+  } catch {
+    return null;
+  }
+}
+
+async function translateText(value, sourceLanguage, targetLanguage, signal) {
+  const text = String(value || "");
+  if (!text) return text;
+  if (sourceLanguage === targetLanguage) return text;
+
+  const translator = await getTranslator(sourceLanguage, targetLanguage, signal);
+  if (!translator) return text;
+
+  try {
+    return await translator.translate(text);
+  } catch {
+    return text;
+  }
+}
+
+async function translateArray(values, sourceLanguage, targetLanguage, signal) {
+  if (!Array.isArray(values) || values.length === 0) return Array.isArray(values) ? [] : [];
+  const translated = [];
+  for (const value of values) {
+    translated.push(await translateText(value, sourceLanguage, targetLanguage, signal));
+  }
+  return translated;
+}
+
+async function localizeAssessmentResult(result, targetLanguage, signal) {
+  if (!result || targetLanguage !== "zh") return result;
+  const sourceLanguage = "en";
+  const localized = {
+    ...result,
+    summary: await translateText(result.summary, sourceLanguage, targetLanguage, signal),
+    rationale: await translateText(result.rationale, sourceLanguage, targetLanguage, signal),
+    gdelt_summary: await translateText(result.gdelt_summary, sourceLanguage, targetLanguage, signal),
+    reproducibility_summary: await translateText(result.reproducibility_summary, sourceLanguage, targetLanguage, signal),
+    cross_validation_summary: await translateText(result.cross_validation_summary, sourceLanguage, targetLanguage, signal),
+    specificity_summary: await translateText(result.specificity_summary, sourceLanguage, targetLanguage, signal),
+    conflicts: await translateArray(result.conflicts, sourceLanguage, targetLanguage, signal),
+    missing: await translateArray(result.missing, sourceLanguage, targetLanguage, signal),
+    evidence: Array.isArray(result.evidence)
+      ? await Promise.all(result.evidence.map(async (item) => ({
+          ...item,
+          title: await translateText(item?.title, sourceLanguage, targetLanguage, signal),
+          quote: await translateText(item?.quote, sourceLanguage, targetLanguage, signal)
+        })))
+      : result.evidence
+  };
+
+  if (localized.rule_notes) {
+    localized.rule_notes = {
+      reproducibility: await translateText(result.rule_notes?.reproducibility || "", sourceLanguage, targetLanguage, signal),
+      cross_validation: await translateText(result.rule_notes?.cross_validation || "", sourceLanguage, targetLanguage, signal),
+      detail_richness: await translateText(result.rule_notes?.detail_richness || "", sourceLanguage, targetLanguage, signal)
+    };
+  }
+
+  if (localized.llm_assessment) {
+    localized.llm_assessment = {
+      ...result.llm_assessment,
+      rationale: await translateText(result.llm_assessment?.rationale || "", sourceLanguage, targetLanguage, signal),
+      summary: await translateText(result.llm_assessment?.summary || "", sourceLanguage, targetLanguage, signal),
+      error: await translateText(result.llm_assessment?.error || "", sourceLanguage, targetLanguage, signal)
+    };
+  }
+
+  return localized;
 }
 
 function updateModeButtons() {
@@ -140,6 +381,7 @@ async function startVerification(verification, { allowDownload = false } = {}) {
   renderEvidence([]);
   gdeltSummaryEl.textContent = "—";
   setLLMAssessment(null);
+  setDebugTrace("");
 
   try {
     const payload = await runLocalAnalysis(currentVerification.input, controller.signal, {
@@ -159,6 +401,11 @@ async function startVerification(verification, { allowDownload = false } = {}) {
     renderVerification(result);
   } catch (err) {
     if (controller.signal.aborted || activeRun.id !== currentVerification.runId) return;
+
+    reportError("startVerification catch", err, {
+      input: currentVerification.input,
+      mode: activeRun.mode
+    });
 
     const result = errorResult({
       input: currentVerification.input,
@@ -190,6 +437,7 @@ function renderVerification(payload) {
   renderEvidence(payload.evidence);
   gdeltSummaryEl.textContent = payload.gdelt_summary || "—";
   setLLMAssessment(payload.llm_assessment || null);
+  setDebugTrace(payload.debug_trace || payload.llm_assessment?.debug_trace || "");
 }
 
 function renderRuleScores(ruleScores, ruleNotes, extraContext = {}) {
@@ -270,9 +518,12 @@ async function runLocalAnalysis(input, signal, { allowDownload = false } = {}) {
     throw new Error("Chrome 内置 AI 不可用，请稍后重试");
   }
 
+  const outputLanguage = await getPreferredOutputLanguage();
+  const modelOutputLanguage = resolveModelOutputLanguage(outputLanguage);
+
   const availability = await api.availability({
     expectedInputs: [{ type: "text", languages: ["en"] }],
-    expectedOutputs: [{ type: "text", languages: ["en"] }]
+    expectedOutputs: [{ type: "text", languages: [modelOutputLanguage] }]
   });
 
   if (availability !== "available" && !allowDownload) {
@@ -280,53 +531,160 @@ async function runLocalAnalysis(input, signal, { allowDownload = false } = {}) {
   }
 
   gdeltSummaryEl.textContent = "正在搜索 GDELT 相关新闻…";
-  const gdeltBundle = await fetchGdeltBundle(input, signal);
+  const gdeltBundle = await fetchGdeltBundle(input, signal, outputLanguage);
   gdeltSummaryEl.textContent = gdeltBundle.summary || "—";
   const mbfcEntry = await lookupMbfcEntry(input.url || "");
   const session = await api.create({
     expectedInputs: [{ type: "text", languages: ["en"] }],
-    expectedOutputs: [{ type: "text", languages: ["en"] }],
+    expectedOutputs: [{ type: "text", languages: [modelOutputLanguage] }],
     signal
   });
 
-  const prompt = buildLocalPrompt(input, gdeltBundle, mbfcEntry);
-  const raw = await session.prompt(prompt);
+  const prompt = buildLocalPrompt(input, gdeltBundle, mbfcEntry, modelOutputLanguage, outputLanguage);
+  let raw = "";
+  try {
+    raw = await promptLocalAssessment(session, prompt, signal);
+  } catch (err) {
+    reportError("local AI prompt", err, {
+      outputLanguage,
+      modelOutputLanguage
+    });
+    raw = "";
+  }
+  console.error(`${DEBUG_PREFIX} local AI raw output`, {
+    outputLanguage,
+    modelOutputLanguage,
+    promptPreview: truncateForDebug(prompt, 2500),
+    rawPreview: truncateForDebug(raw, 3500)
+  });
   const parsed = parseAssessmentJson(raw);
   if (!parsed) {
-    return {
-      verdict: "unclear",
-      confidence: 0,
-      summary: raw?.trim() || "本地 AI 未返回可解析结果",
-      rationale: raw?.trim() || "本地 AI 未返回可解析结果",
-      rule_scores: null,
-      rule_notes: null,
-      evidence: mergeEvidenceLists(buildFallbackEvidence(input), gdeltBundle.items, input),
-      conflicts: [],
-      missing: ["本地 AI 输出格式不符合预期"],
-      gdelt_summary: gdeltBundle.summary,
-      reproducibility_summary: buildReproducibilitySummary(gdeltBundle, mbfcEntry),
-      cross_validation_summary: buildCrossValidationSummary(gdeltBundle),
-      specificity_summary: buildSpecificitySummary(input)
-    };
+    const fallback = buildDeterministicLocalAssessment(input, gdeltBundle, mbfcEntry, raw, outputLanguage);
+    fallback.debug_trace = buildDebugTrace({
+      stage: "local-parse-fallback",
+      outputLanguage,
+      modelOutputLanguage,
+      prompt,
+      raw,
+      parsed: null,
+      error: "raw output did not parse as JSON",
+      gdeltSummary: gdeltBundle.summary,
+      gdeltRawPreview: gdeltBundle.rawPreview,
+      mbfc: mbfcEntry
+    });
+    console.error(`${DEBUG_PREFIX} local AI parse fallback`, {
+      stack: "",
+      debug_trace: fallback.debug_trace,
+      promptPreview: truncateForDebug(prompt, 2500),
+      rawPreview: truncateForDebug(raw, 3500)
+    });
+    return fallback;
   }
 
   const ruleScores = normalizeRuleScores(parsed.rule_scores);
   const overallScore = normalizeConfidence(parsed.overall_score ?? averageRuleScores(ruleScores));
-  return {
+  const result = {
     verdict: normalizeVerdict(parsed.verdict || verdictFromScore(overallScore)),
     confidence: overallScore,
-    summary: String(parsed.summary || parsed.rationale || "本地 AI 已完成分析"),
-    rationale: String(parsed.rationale || parsed.summary || "本地 AI 已完成分析"),
+    summary: sanitizeModelText(parsed.summary || parsed.rationale || fallbackLanguageText(outputLanguage, "analysisDone")),
+    rationale: sanitizeModelText(parsed.rationale || parsed.summary || fallbackLanguageText(outputLanguage, "analysisDone")),
     rule_scores: ruleScores,
     rule_notes: normalizeRuleNotes(parsed.rule_notes),
     evidence: mergeEvidenceLists(normalizeEvidence(parsed.evidence, input), gdeltBundle.items, input),
     conflicts: normalizeList(parsed.conflicts),
     missing: normalizeList(parsed.missing),
     gdelt_summary: gdeltBundle.summary,
-    reproducibility_summary: buildReproducibilitySummary(gdeltBundle, mbfcEntry),
-    cross_validation_summary: buildCrossValidationSummary(gdeltBundle),
-    specificity_summary: buildSpecificitySummary(input)
+    reproducibility_summary: buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage),
+    cross_validation_summary: buildCrossValidationSummary(gdeltBundle, outputLanguage),
+    specificity_summary: buildSpecificitySummary(input, outputLanguage)
   };
+
+  const localizedResult = outputLanguage === "zh"
+    ? await localizeAssessmentResult(result, outputLanguage, signal)
+    : result;
+  console.error(`${DEBUG_PREFIX} local AI success`, {
+    outputLanguage,
+    modelOutputLanguage,
+    verdict: localizedResult.verdict,
+    confidence: localizedResult.confidence,
+    stack: ""
+  });
+  return localizedResult;
+}
+
+function buildDeterministicLocalAssessment(input, gdeltBundle, mbfcEntry, raw, outputLanguage) {
+  const rule_scores = buildDeterministicRuleScores(input, gdeltBundle, mbfcEntry);
+  const confidence = normalizeConfidence(averageRuleScores(rule_scores));
+  const rationale = sanitizeModelText(raw) || fallbackLanguageText(outputLanguage, "noOutput");
+  return {
+    verdict: normalizeVerdict(verdictFromScore(confidence)),
+    confidence,
+    summary: rationale,
+    rationale,
+    rule_scores,
+    rule_notes: {
+      reproducibility: buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage),
+      cross_validation: buildCrossValidationSummary(gdeltBundle, outputLanguage),
+      detail_richness: buildSpecificitySummary(input, outputLanguage)
+    },
+    evidence: mergeEvidenceLists(buildFallbackEvidence(input), gdeltBundle.items, input),
+    conflicts: [],
+    missing: raw ? [fallbackLanguageText(outputLanguage, "jsonFallback")] : [fallbackLanguageText(outputLanguage, "noOutput")],
+    gdelt_summary: gdeltBundle.summary,
+    reproducibility_summary: buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage),
+    cross_validation_summary: buildCrossValidationSummary(gdeltBundle, outputLanguage),
+    specificity_summary: buildSpecificitySummary(input, outputLanguage)
+  };
+}
+
+function buildDeterministicRuleScores(input, gdeltBundle, mbfcEntry) {
+  return {
+    reproducibility: scoreReproducibility(gdeltBundle, mbfcEntry),
+    cross_validation: scoreCrossValidation(gdeltBundle),
+    detail_richness: scoreSpecificity(input)
+  };
+}
+
+function scoreSpecificity(input) {
+  const text = getAnalysisText(input) || `${input?.selectionText || ""} ${input?.pageText || ""}`;
+  const normalized = String(text || "");
+  const words = normalized.split(/\s+/).filter(Boolean).length;
+  const numbers = (normalized.match(/\b\d+(?:\.\d+)?%?\b/g) || []).length;
+  const dates = (normalized.match(/(?:\d{4}[/-]\d{1,2}[/-]\d{1,2})|(?:\d{4}年\d{1,2}月\d{1,2}日)|(?:\d{1,2}\/\d{1,2}\/\d{4})/g) || []).length;
+  const entities = extractGdeltKeywords(normalized).length;
+  const hasConcreteQuestion = /(?:谁|what|who|when|where|why|how|什么|何时|何地|为什么|如何)/i.test(normalized);
+  const score = 0.18 + Math.min(0.35, words / 180) + Math.min(0.18, numbers * 0.05) + Math.min(0.12, dates * 0.06) + Math.min(0.1, entities * 0.015) + (hasConcreteQuestion ? 0.07 : 0);
+  return clamp(score, 0, 1);
+}
+
+function scoreCrossValidation(gdeltBundle) {
+  const items = Array.isArray(gdeltBundle?.items) ? gdeltBundle.items : [];
+  if (items.length === 0) return 0.12;
+
+  const domains = countDistinctValues(items.map((item) => item.domain).filter(Boolean));
+  const countries = countDistinctValues(items.map((item) => item.country).filter(Boolean));
+  const dates = countDistinctValues(items.map((item) => formatDateOnly(item.retrieved_at)).filter((value) => value && value !== "未知"));
+  const toneCount = countDistinctValues(items.map((item) => item.tone).filter(Boolean));
+  const score = 0.22 +
+    Math.min(0.22, items.length * 0.04) +
+    Math.min(0.16, Math.max(0, domains - 1) * 0.08) +
+    Math.min(0.12, Math.max(0, countries - 1) * 0.06) +
+    Math.min(0.12, Math.max(0, dates - 1) * 0.05) +
+    Math.min(0.08, Math.max(0, toneCount - 1) * 0.04);
+  return clamp(score, 0, 1);
+}
+
+function scoreReproducibility(gdeltBundle, mbfcEntry) {
+  const items = Array.isArray(gdeltBundle?.items) ? gdeltBundle.items : [];
+  const domains = countDistinctValues(items.map((item) => item.domain).filter(Boolean));
+  const dates = countDistinctValues(items.map((item) => formatDateOnly(item.retrieved_at)).filter((value) => value && value !== "未知"));
+  const hasMbfc = Boolean(mbfcEntry);
+  const score = 0.2 +
+    (hasMbfc ? 0.22 : 0) +
+    Math.min(0.18, items.length * 0.03) +
+    Math.min(0.18, Math.max(0, domains - 1) * 0.08) +
+    Math.min(0.14, Math.max(0, dates - 1) * 0.07);
+  return clamp(score, 0, 1);
 }
 
 function normalizeResult(payload, mode, input) {
@@ -341,6 +699,7 @@ function normalizeResult(payload, mode, input) {
     conflicts: normalizeList(payload?.conflicts),
     missing: normalizeList(payload?.missing),
     llm_assessment: payload?.llm_assessment || null,
+    debug_trace: String(payload?.debug_trace || ""),
     mode,
     gdelt_summary: String(payload?.gdelt_summary || ""),
     reproducibility_summary: String(payload?.reproducibility_summary || ""),
@@ -383,16 +742,25 @@ function errorResult({ input, mode, message }) {
       rationale: message,
       error: message
     },
+    debug_trace: buildDebugTrace({
+      stage: "error",
+      error: message,
+      prompt: "",
+      raw: "",
+      parsed: null
+    }),
     mode,
     gdelt_summary: ""
   };
 }
 
-function buildLocalPrompt(input, gdeltBundle, mbfcEntry) {
+function buildLocalPrompt(input, gdeltBundle, mbfcEntry, modelOutputLanguage = "en", displayLanguage = "en") {
   const analysisText = getAnalysisText(input);
-  const specificitySummary = buildSpecificitySummary(input);
-  const crossValidationSummary = buildCrossValidationSummary(gdeltBundle);
-  const reproducibilitySummary = buildReproducibilitySummary(gdeltBundle, mbfcEntry);
+  const specificitySummary = buildSpecificitySummary(input, "en");
+  const crossValidationSummary = buildCrossValidationSummary(gdeltBundle, "en");
+  const reproducibilitySummary = buildReproducibilitySummary(gdeltBundle, mbfcEntry, "en");
+  const outputLanguageLabel = getLanguageLabel(modelOutputLanguage);
+  const displayLanguageLabel = getLanguageLabel(displayLanguage);
   const gdeltLines = Array.isArray(gdeltBundle?.items) && gdeltBundle.items.length > 0
     ? gdeltBundle.items.map((item, index) => {
         const date = item.retrieved_at ? new Date(item.retrieved_at).toISOString().slice(0, 10) : "unknown-date";
@@ -400,27 +768,29 @@ function buildLocalPrompt(input, gdeltBundle, mbfcEntry) {
         const country = item.country ? ` · ${item.country}` : "";
         const tone = item.tone ? ` · tone=${item.tone}` : "";
         const quote = item.quote || "";
-        return `${index + 1}. ${date}${country}${tone} · ${source} · ${item.title || item.url || "GDELT 命中"}${quote ? `\n   ${quote}` : ""}`;
+        return `${index + 1}. ${date}${country}${tone} · ${source} · ${item.title || item.url || "GDELT match"}${quote ? `\n   ${quote}` : ""}`;
       }).join("\n")
-    : "本次查询没有找到足够接近的 GDELT 新闻事件。";
-  const gdeltQueryLine = gdeltBundle?.query ? `GDELT 查询词：${gdeltBundle.query}` : "GDELT 查询词：(空)";
-  const gdeltAnchorLine = gdeltBundle?.anchorDate ? `GDELT 锚定日期：${gdeltBundle.anchorDate}` : "GDELT 锚定日期：(无)";
+    : "This query did not find a sufficiently close GDELT news event.";
+  const gdeltQueryLine = gdeltBundle?.query ? `GDELT query: ${gdeltBundle.query}` : "GDELT query: (empty)";
+  const gdeltAnchorLine = gdeltBundle?.anchorDate ? `GDELT anchor date: ${gdeltBundle.anchorDate}` : "GDELT anchor date: (none)";
   return [
-    "你是一个金融信息核验助手，只能基于下方提供的文本、GDELT 证据和你训练中已有的知识进行判断，不要联网，不要编造外部事实。",
-    "请严格按三原则思考，并分别给出分数与结论：",
-    "1) 信息具体性：看声明本身的密度和可证伪性。重点关注 DIKW 层级、5W1H 完整度、数据与结论的相关性、细节是否精确、信息熵是否低。",
-    "2) 交叉验证：看声明是否被独立来源印证。重点关注 GDELT 的独立域名数、来源国家分布、报道口径一致性（tone）、以及是否符合基础科学知识。",
-    "3) 可重复性：看声明在时间轴上的稳定性和信源可信度。重点关注 MBFC 域名信誉、GDELT 中该事件的持续出现、首次/最近出现时间、以及是否长期被不同来源重复印证。",
-    "GDELT 证据是交叉验证的主要输入；MBFC 只用于可重复性和信源可信度。",
+    "You are a financial information verification assistant. Judge only from the text below, the GDELT evidence, and your training knowledge. Do not browse the web or invent outside facts.",
+    `Write the final answer in ${outputLanguageLabel}.`,
+    displayLanguage === "zh" ? `The user interface will translate the final answer into ${displayLanguageLabel}.` : "",
+    "Evaluate the statement using three principles:",
+    "1) Specificity: judge the density and falsifiability of the claim itself. Focus on DIKW depth, 5W1H completeness, relevance between numbers and conclusions, precision of details, and low information entropy.",
+    "2) Cross-validation: judge whether independent sources support the claim. Focus on GDELT's distinct domains, source-country spread, tone consistency, and consistency with basic scientific knowledge.",
+    "3) Reproducibility: judge the claim's stability over time and the credibility of the source. Focus on MBFC domain reputation, whether the event persists in GDELT, first/recent appearance time, and whether different sources repeat the claim over time.",
+    "GDELT evidence is the main input for cross-validation. MBFC is only for reproducibility and source credibility.",
     "Return ONLY valid JSON with these keys:",
-    '{ "verdict": "supported|contradicted|unclear", "confidence": 0.0, "overall_score": 0.0, "summary": "short Chinese summary", "rationale": "short Chinese explanation", "rule_scores": {"reproducibility": 0.0, "cross_validation": 0.0, "detail_richness": 0.0}, "rule_notes": {"reproducibility": "...", "cross_validation": "...", "detail_richness": "..."}, "evidence": [{"title":"...", "url":"...", "quote":"..."}], "conflicts": ["..."], "missing": ["..."] }',
+    `{ "verdict": "supported|contradicted|unclear", "confidence": 0.0, "overall_score": 0.0, "summary": "short ${outputLanguageLabel} summary", "rationale": "short ${outputLanguageLabel} explanation", "rule_scores": {"reproducibility": 0.0, "cross_validation": 0.0, "detail_richness": 0.0}, "rule_notes": {"reproducibility": "...", "cross_validation": "...", "detail_richness": "..."}, "evidence": [{"title":"...", "url":"...", "quote":"..."}], "conflicts": ["..."], "missing": ["..."] }`,
     "Rules:",
-    "- verdict 必须反映这条声明整体可信度。",
-    "- confidence 和 overall_score 必须是 0 到 1 之间的数字。",
-    "- rule_scores 必须分别对应三原则：reproducibility、cross_validation、detail_richness。",
-    "- rule_notes 需要简短说明每个分数为什么这样打，并且尽量引用 GDELT/MBFC 线索。",
-    "- evidence 里的 quote 要尽量是原文或证据中的精确片段。",
-    "- 如果声明太弱、太空、或者无法验证，请返回 unclear。",
+    "- The verdict must reflect the claim's overall credibility.",
+    "- confidence and overall_score must be numbers between 0 and 1.",
+    "- rule_scores must correspond to reproducibility, cross_validation, and detail_richness.",
+    "- rule_notes should briefly explain why each score was assigned and should cite GDELT/MBFC clues when possible.",
+    "- evidence quotes should be exact or near-exact excerpts from the source.",
+    "- If the claim is too weak, too vague, or cannot be verified, return unclear.",
     "",
     `URL: ${input.url || ""}`,
     `Title: ${input.title || ""}`,
@@ -430,19 +800,99 @@ function buildLocalPrompt(input, gdeltBundle, mbfcEntry) {
     "",
     gdeltQueryLine,
     gdeltAnchorLine,
-    "信息具体性线索：",
+    "Specificity cues:",
     specificitySummary,
     "",
-    "交叉验证线索：",
+    "Cross-validation cues:",
     crossValidationSummary,
     "",
-    "可重复性线索：",
+    "Reproducibility cues:",
     reproducibilitySummary,
     "",
     "GDELT evidence bundle:",
     gdeltLines
   ].join("\n");
 }
+
+const LOCAL_ANALYSIS_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  required: [
+    "verdict",
+    "confidence",
+    "overall_score",
+    "summary",
+    "rationale",
+    "rule_scores",
+    "rule_notes",
+    "evidence",
+    "conflicts",
+    "missing"
+  ],
+  properties: {
+    verdict: {
+      type: "string",
+      enum: ["supported", "contradicted", "unclear"]
+    },
+    confidence: {
+      type: "number",
+      minimum: 0,
+      maximum: 1
+    },
+    overall_score: {
+      type: "number",
+      minimum: 0,
+      maximum: 1
+    },
+    summary: {
+      type: "string"
+    },
+    rationale: {
+      type: "string"
+    },
+    rule_scores: {
+      type: "object",
+      additionalProperties: false,
+      required: ["reproducibility", "cross_validation", "detail_richness"],
+      properties: {
+        reproducibility: { type: "number", minimum: 0, maximum: 1 },
+        cross_validation: { type: "number", minimum: 0, maximum: 1 },
+        detail_richness: { type: "number", minimum: 0, maximum: 1 }
+      }
+    },
+    rule_notes: {
+      type: "object",
+      additionalProperties: false,
+      required: ["reproducibility", "cross_validation", "detail_richness"],
+      properties: {
+        reproducibility: { type: "string" },
+        cross_validation: { type: "string" },
+        detail_richness: { type: "string" }
+      }
+    },
+    evidence: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: true,
+        required: ["title", "url", "quote"],
+        properties: {
+          title: { type: "string" },
+          url: { type: "string" },
+          quote: { type: "string" }
+        }
+      }
+    },
+    conflicts: {
+      type: "array",
+      items: { type: "string" }
+    },
+    missing: {
+      type: "array",
+      items: { type: "string" }
+    }
+  }
+};
 
 function getAnalysisText(input) {
   const selection = String(input?.selectionText || "").trim();
@@ -476,6 +926,30 @@ async function lookupMbfcEntry(url) {
   return null;
 }
 
+async function repairAssessmentJson(session, raw, signal) {
+  const text = sanitizeModelText(raw);
+  if (!text) return "";
+
+  const repairPrompt = [
+    "请把下面的内容修复成严格合法的 JSON 对象，只输出 JSON 本身，不要解释，不要 markdown，不要代码块。",
+    "如果原文里已经有 JSON，请修正它并补全缺失字段。",
+    "如果原文不是 JSON，请根据原文生成 best-effort 的 JSON，并保留原文的结论与证据。",
+    "必须包含这些键：verdict、confidence、overall_score、summary、rationale、rule_scores、rule_notes、evidence、conflicts、missing。",
+    "内容如下：",
+    text
+  ].join("\n");
+
+  try {
+    return await session.prompt(repairPrompt, { signal });
+  } catch {
+    return "";
+  }
+}
+
+async function promptLocalAssessment(session, prompt, signal) {
+  return await session.prompt(prompt, { signal });
+}
+
 async function loadMbfcDataset() {
   if (!mbfcDatasetPromise) {
     mbfcDatasetPromise = fetch(chrome.runtime.getURL("src/data/mbfc.json"))
@@ -499,31 +973,135 @@ function normalizeMbfcEntry(entry, hostname) {
   };
 }
 
-function buildReproducibilitySummary(gdeltBundle, mbfcEntry) {
+function buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage = "en") {
+  const language = resolveOutputLanguage(outputLanguage);
+  const copy = {
+    en: {
+      mbfc: "MBFC",
+      noMatch: "no static match or the domain has not been packaged yet.",
+      timeline: "GDELT timeline",
+      first: "first",
+      recent: "recent",
+      distinct: "distinct domains",
+      noData: "no usable news events found.",
+      cue: "Assessment cue: reproducibility is stronger when the source is stable over time, repeats across events, and has better domain reputation."
+    },
+    es: {
+      mbfc: "MBFC",
+      noMatch: "no hay coincidencia estática o el dominio aún no se ha empaquetado.",
+      timeline: "Cronología de GDELT",
+      first: "primera",
+      recent: "reciente",
+      distinct: "dominios distintos",
+      noData: "no se encontraron eventos de noticias utilizables.",
+      cue: "Pista de evaluación: la reproducibilidad es mayor cuando la fuente es estable en el tiempo, se repite entre eventos y tiene mejor reputación de dominio."
+    },
+    ja: {
+      mbfc: "MBFC",
+      noMatch: "静的な一致がないか、まだそのドメインがパッケージ化されていません。",
+      timeline: "GDELT タイムライン",
+      first: "最初",
+      recent: "最近",
+      distinct: "異なるドメイン",
+      noData: "利用できるニュースイベントは見つかりませんでした。",
+      cue: "評価の目安: 情報源が時間的に安定し、複数のイベントで繰り返され、ドメイン評価が高いほど再現性は高くなります。"
+    },
+    zh: {
+      mbfc: "MBFC",
+      noMatch: "没有静态匹配，或者该域名尚未打包。",
+      timeline: "GDELT 时间线",
+      first: "首次",
+      recent: "最近",
+      distinct: "个独立域名",
+      noData: "未找到可用新闻事件。",
+      cue: "评估提示：如果信源在时间上稳定、反复出现且域名信誉较好，可重复性更高。"
+    }
+  }[language] || {
+    mbfc: "MBFC",
+    noMatch: "no static match or the domain has not been packaged yet.",
+    timeline: "GDELT timeline",
+    first: "first",
+    recent: "recent",
+    distinct: "distinct domains",
+    noData: "no usable news events found.",
+    cue: "Assessment cue: reproducibility is stronger when the source is stable over time, repeats across events, and has better domain reputation."
+  };
   const lines = [];
   if (mbfcEntry) {
-    lines.push(`MBFC：${mbfcEntry.hostname}${mbfcEntry.rating ? ` · ${mbfcEntry.rating}` : ""}${mbfcEntry.label ? ` · ${mbfcEntry.label}` : ""}`);
+    lines.push(`${copy.mbfc}: ${mbfcEntry.hostname}${mbfcEntry.rating ? ` · ${mbfcEntry.rating}` : ""}${mbfcEntry.label ? ` · ${mbfcEntry.label}` : ""}`);
   } else {
-    lines.push("MBFC：未命中静态数据或尚未打包该域名。");
+    lines.push(`${copy.mbfc}: ${copy.noMatch}`);
   }
 
   if (gdeltBundle?.items?.length) {
     const firstDate = gdeltBundle.items[gdeltBundle.items.length - 1]?.retrieved_at || "";
     const lastDate = gdeltBundle.items[0]?.retrieved_at || "";
     const domains = countDistinctValues(gdeltBundle.items.map((item) => item.domain).filter(Boolean));
-    lines.push(`GDELT 时间线：首次 ${formatDateOnly(firstDate)} · 最近 ${formatDateOnly(lastDate)} · 独立域名 ${domains}`);
+    lines.push(`${copy.timeline}: ${copy.first} ${formatDateOnly(firstDate)} · ${copy.recent} ${formatDateOnly(lastDate)} · ${copy.distinct} ${domains}`);
   } else {
-    lines.push("GDELT 时间线：未找到可用新闻事件。");
+    lines.push(`${copy.timeline}: ${copy.noData}`);
   }
 
-  lines.push("判断要点：如果信源长期稳定、重复出现且域名信誉较好，可重复性更高。");
+  lines.push(copy.cue);
   return lines.join("\n");
 }
 
-function buildCrossValidationSummary(gdeltBundle) {
+function buildCrossValidationSummary(gdeltBundle, outputLanguage = "en") {
+  const language = resolveOutputLanguage(outputLanguage);
+  const copy = {
+    en: {
+      empty: "GDELT cross-validation: no usable news events, so independent corroboration is weak.",
+      prefix: "GDELT cross-validation",
+      hitsLabel: "hits",
+      domainsLabel: "distinct domains",
+      countriesLabel: "source countries",
+      tone: "Tone distribution",
+      span: "Time span",
+      cue: "Assessment cue: cross-validation is stronger when multiple domains, multiple countries, and consistent tone all align."
+    },
+    es: {
+      empty: "Validación cruzada de GDELT: no hay eventos de noticias utilizables, por lo que la corroboración independiente es débil.",
+      prefix: "Validación cruzada de GDELT",
+      hitsLabel: "coincidencias",
+      domainsLabel: "dominios distintos",
+      countriesLabel: "países de origen",
+      tone: "Distribución de tono",
+      span: "Intervalo de tiempo",
+      cue: "Pista de evaluación: la validación cruzada es más fuerte cuando coinciden múltiples dominios, múltiples países y un tono consistente."
+    },
+    ja: {
+      empty: "GDELT のクロス検証: 利用できるニュースイベントがなく、独立した裏付けは弱いです。",
+      prefix: "GDELT のクロス検証",
+      hitsLabel: "件のヒット",
+      domainsLabel: "異なるドメイン",
+      countriesLabel: "発信国",
+      tone: "トーン分布",
+      span: "期間",
+      cue: "評価の目安: 複数のドメイン、複数の国、そして一貫したトーンがそろうほどクロス検証は強くなります。"
+    },
+    zh: {
+      empty: "GDELT 交叉验证：没有可用新闻事件，因此独立印证较弱。",
+      prefix: "GDELT 交叉验证",
+      hitsLabel: "条命中",
+      domainsLabel: "个独立域名",
+      countriesLabel: "个来源国家",
+      tone: "口径分布",
+      span: "时间范围",
+      cue: "评估提示：当多个域名、多个国家和一致的口径同时出现时，交叉验证会更强。"
+    }
+  }[language] || {
+    empty: "GDELT cross-validation: no usable news events, so independent corroboration is weak.",
+    prefix: "GDELT cross-validation",
+    hitsLabel: "hits",
+    domainsLabel: "distinct domains",
+    countriesLabel: "source countries",
+    tone: "Tone distribution",
+    span: "Time span",
+    cue: "Assessment cue: cross-validation is stronger when multiple domains, multiple countries, and consistent tone all align."
+  };
   const items = Array.isArray(gdeltBundle?.items) ? gdeltBundle.items : [];
   if (items.length === 0) {
-    return "GDELT 交叉验证：无可用新闻事件，独立来源印证不足。";
+    return copy.empty;
   }
 
   const domains = countDistinctValues(items.map((item) => item.domain).filter(Boolean));
@@ -531,14 +1109,51 @@ function buildCrossValidationSummary(gdeltBundle) {
   const tones = summarizeCounts(items.map((item) => item.tone).filter(Boolean));
   const timeline = `${formatDateOnly(items[items.length - 1]?.retrieved_at)} → ${formatDateOnly(items[0]?.retrieved_at)}`;
   return [
-    `GDELT 交叉验证：命中 ${items.length} 条，独立域名 ${domains}，来源国家 ${countries}`,
-    tones ? `口径/tone：${tones}` : "口径/tone：未提供",
-    `时间范围：${timeline}`,
-    "判断要点：如果多域名、多国家、口径一致，交叉验证更强。"
+    `${copy.prefix}: ${items.length} ${copy.hitsLabel}, ${domains} ${copy.domainsLabel}, ${countries} ${copy.countriesLabel}`,
+    tones ? `${copy.tone}: ${tones}` : `${copy.tone}: unavailable`,
+    `${copy.span}: ${timeline}`,
+    copy.cue
   ].join("\n");
 }
 
-function buildSpecificitySummary(input) {
+function buildSpecificitySummary(input, outputLanguage = "en") {
+  const language = resolveOutputLanguage(outputLanguage);
+  const copy = {
+    en: {
+      dikw: "DIKW",
+      fiveW1H: "5W1H",
+      relation: "Data-to-conclusion relevance: if numbers are merely nearby, do not support the conclusion, or key variables are missing, specificity should be scored lower.",
+      bayes: "Bayesian heuristic: more precise details, more concrete numbers, and more complete conditions mean lower entropy and easier verification.",
+      currentText: "Current text length"
+    },
+    es: {
+      dikw: "DIKW",
+      fiveW1H: "5W1H",
+      relation: "Relevancia entre datos y conclusión: si los números solo están cerca, no respaldan la conclusión o faltan variables clave, la especificidad debe puntuarse más bajo.",
+      bayes: "Heurística bayesiana: detalles más precisos, números más concretos y condiciones más completas significan menor entropía y verificación más fácil.",
+      currentText: "Longitud actual del texto"
+    },
+    ja: {
+      dikw: "DIKW",
+      fiveW1H: "5W1H",
+      relation: "データと結論の関連性: 数値が周辺にあるだけで結論を裏付けない、または重要な変数が欠けている場合、具体性のスコアは低くすべきです。",
+      bayes: "ベイズ的ヒューリスティック: より正確な詳細、より具体的な数値、より完全な条件ほどエントロピーは低くなり、検証しやすくなります。",
+      currentText: "現在のテキスト長"
+    },
+    zh: {
+      dikw: "DIKW",
+      fiveW1H: "5W1H",
+      relation: "数据与结论相关性：如果数字只是顺带出现、没有支撑结论，或者缺少关键变量，具体性应降低评分。",
+      bayes: "贝叶斯启发：细节越精确、数字越具体、条件越完整，熵越低，越容易验证。",
+      currentText: "当前文本长度"
+    }
+  }[language] || {
+    dikw: "DIKW",
+    fiveW1H: "5W1H",
+    relation: "Data-to-conclusion relevance: if numbers are merely nearby, do not support the conclusion, or key variables are missing, specificity should be scored lower.",
+    bayes: "Bayesian heuristic: more precise details, more concrete numbers, and more complete conditions mean lower entropy and easier verification.",
+    currentText: "Current text length"
+  };
   const text = getAnalysisText(input) || `${input?.selectionText || ""} ${input?.pageText || ""}`;
   const normalized = String(text || "");
   const words = normalized.split(/\s+/).filter(Boolean);
@@ -551,11 +1166,11 @@ function buildSpecificitySummary(input) {
   const why = /(?:为什么|why|because|reason)/i.test(normalized);
   const how = /(?:如何|how|method|way|via)/i.test(normalized);
 
-  const diwk = `DIKW：信息/知识密度以“可核查细节 + 明确数据 + 明确因果”为主，当前文本长度 ${words.length} 词，数字 ${numbers.length} 个，日期 ${dates.length} 个。`;
-  const fiveW1H = `5W1H：谁=${yesNo(who)}，什么=${yesNo(what)}，何时=${yesNo(when)}，何地=${yesNo(where)}，为什么=${yesNo(why)}，如何=${yesNo(how)}。`;
-  const relation = "数据与结论相关性：若数据只是在旁边出现、未支撑结论、或关键变量缺失，则具体性应打低分。";
-  const bayes = "贝叶斯启发：细节越精确、数值越具体、条件越完整，信息熵越低，结论越可验证。";
-  return [diwk, fiveW1H, relation, bayes].join("\n");
+  const dikw = `${copy.dikw}: focus on verifiable detail, explicit data, and explicit causality. ${copy.currentText}: ${words.length} words, ${numbers.length} numbers, ${dates.length} dates.`;
+  const fiveW1H = `${copy.fiveW1H}: who=${yesNo(who)}, what=${yesNo(what)}, when=${yesNo(when)}, where=${yesNo(where)}, why=${yesNo(why)}, how=${yesNo(how)}.`;
+  const relation = copy.relation;
+  const bayes = copy.bayes;
+  return [dikw, fiveW1H, relation, bayes].join("\n");
 }
 
 function normalizeHostname(url) {
@@ -637,16 +1252,20 @@ function mergeEvidenceLists(primary, secondary, input) {
   return merged.length > 0 ? merged : buildFallbackEvidence(input);
 }
 
-async function fetchGdeltBundle(input, signal) {
+async function fetchGdeltBundle(input, signal, outputLanguage = "en") {
   const queries = buildGdeltQueries(input);
   const anchorDate = extractAnchorDate(input);
   const query = queries[0] || "";
+  console.debug(`${DEBUG_PREFIX} GDELT query candidates`, {
+    queries,
+    anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : ""
+  });
   if (!query) {
     return {
       query: "",
       items: [],
       anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : "",
-      summary: summarizeGdeltBundle("", [], "", anchorDate)
+      summary: summarizeGdeltBundle("", [], "", anchorDate, outputLanguage)
     };
   }
 
@@ -655,7 +1274,18 @@ async function fetchGdeltBundle(input, signal) {
   if (cached) {
     return {
       ...cached,
-      summary: summarizeGdeltBundle(query, cached.items || [], cached.errorMessage || "", anchorDate)
+      summary: summarizeGdeltBundle(query, cached.items || [], cached.errorMessage || "", anchorDate, outputLanguage)
+    };
+  }
+
+  const cooldownUntil = await getGdeltCooldownUntil();
+  if (cooldownUntil > Date.now()) {
+    return {
+      query,
+      items: [],
+      anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : "",
+      errorMessage: `GDELT 暂时限流，已进入冷却期，${Math.ceil((cooldownUntil - Date.now()) / 1000)} 秒后再试`,
+      summary: summarizeGdeltBundle(query, [], `GDELT 暂时限流，已进入冷却期，${Math.ceil((cooldownUntil - Date.now()) / 1000)} 秒后再试`, anchorDate, outputLanguage)
     };
   }
 
@@ -666,8 +1296,14 @@ async function fetchGdeltBundle(input, signal) {
     items: topItems,
     anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : "",
     errorMessage: result.errorMessage || "",
-    summary: summarizeGdeltBundle(query, topItems, result.errorMessage, anchorDate)
+    rawPreview: String(result.rawPreview || ""),
+    summary: summarizeGdeltBundle(query, topItems, result.errorMessage, anchorDate, outputLanguage)
   };
+  if (result.errorMessage && /429/.test(result.errorMessage)) {
+    const cooldown = Date.now() + gdeltCooldownMs;
+    gdeltCooldownUntil = cooldown;
+    await chrome.storage.local.set({ gdeltCooldownUntil: cooldown });
+  }
   await setGdeltCachedBundle(cacheKey, bundle);
   return bundle;
 }
@@ -738,16 +1374,46 @@ async function fetchGdeltItems(query, signal) {
   const resp = await fetch(endpoint.toString(), { signal });
   if (!resp.ok) {
     const text = await safeReadText(resp);
+    const payloadPreview = text.slice(0, 600);
+    console.error(`${DEBUG_PREFIX} GDELT HTTP error`, {
+      status: resp.status,
+      statusText: resp.statusText,
+      payloadPreview,
+      endpoint: endpoint.toString()
+    });
     if (resp.status === 429) {
+      const cooldown = Date.now() + gdeltCooldownMs;
+      gdeltCooldownUntil = cooldown;
+      await chrome.storage.local.set({ gdeltCooldownUntil: cooldown });
       return {
         items: [],
-        errorMessage: `GDELT 访问过于频繁，请稍后再试（${resp.status}${text ? ` - ${text}` : ""}）`
+        errorMessage: `GDELT 访问过于频繁，请稍后再试（${resp.status}${text ? ` - ${text}` : ""}）`,
+        rawPreview: payloadPreview
       };
     }
-    throw new Error(`GDELT HTTP ${resp.status}${text ? ` - ${text}` : ""}`);
+    return {
+      items: [],
+      errorMessage: `GDELT HTTP ${resp.status}${text ? ` - ${text}` : ""}`,
+      rawPreview: payloadPreview
+    };
   }
 
-  const data = await resp.json();
+  const text = await safeReadText(resp);
+  let data = null;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    const parseError = new Error(`GDELT returned non-JSON response: ${text ? text.slice(0, 220) : "empty response"}`);
+    console.error(`${DEBUG_PREFIX} GDELT non-JSON response`, parseError, {
+      endpoint: endpoint.toString(),
+      payloadPreview: text.slice(0, 600)
+    });
+    return {
+      items: [],
+      errorMessage: `GDELT returned non-JSON response${text ? `: ${text.slice(0, 220)}` : ""}`,
+      rawPreview: text.slice(0, 600)
+    };
+  }
   const rawItems = Array.isArray(data?.items)
     ? data.items
     : Array.isArray(data?.feed?.items)
@@ -756,7 +1422,8 @@ async function fetchGdeltItems(query, signal) {
 
   return {
     items: rawItems.map(normalizeGdeltItem).filter((item) => item.title || item.url),
-    errorMessage: ""
+    errorMessage: "",
+    rawPreview: text.slice(0, 600)
   };
 }
 
@@ -778,15 +1445,49 @@ function normalizeGdeltItem(item) {
   };
 }
 
-function summarizeGdeltBundle(query, items, errorMessage, anchorDate) {
+function summarizeGdeltBundle(query, items, errorMessage, anchorDate, outputLanguage = "en") {
+  const language = resolveOutputLanguage(outputLanguage);
+  const copy = {
+    en: {
+      failed: (message) => `GDELT search failed: ${message}`,
+      empty: (queryText) => (queryText ? `No close GDELT news events were found in the last 30 days (query: ${queryText}).` : "No close GDELT news events were found in the last 30 days."),
+      query: "GDELT query",
+      anchor: "GDELT anchor date",
+      hits: "GDELT hits in the last 30 days",
+      recent: "Recent events"
+    },
+    es: {
+      failed: (message) => `La búsqueda en GDELT falló: ${message}`,
+      empty: (queryText) => (queryText ? `No se encontraron eventos de noticias cercanos en GDELT en los últimos 30 días (consulta: ${queryText}).` : "No se encontraron eventos de noticias cercanos en GDELT en los últimos 30 días."),
+      query: "Consulta de GDELT",
+      anchor: "Fecha ancla de GDELT",
+      hits: "Resultados de GDELT en los últimos 30 días",
+      recent: "Eventos recientes"
+    },
+    ja: {
+      failed: (message) => `GDELT 検索に失敗しました: ${message}`,
+      empty: (queryText) => (queryText ? `直近30日間で近いGDELTニュースイベントは見つかりませんでした（検索語: ${queryText}）。` : "直近30日間で近いGDELTニュースイベントは見つかりませんでした。"),
+      query: "GDELT クエリ",
+      anchor: "GDELT アンカーデート",
+      hits: "直近30日間のGDELTヒット数",
+      recent: "最近のイベント"
+    },
+    zh: {
+      failed: (message) => `GDELT 搜索失败：${message}`,
+      empty: (queryText) => (queryText ? `过去 30 天未找到接近的 GDELT 新闻事件（查询：${queryText}）。` : "过去 30 天未找到接近的 GDELT 新闻事件。"),
+      query: "GDELT 查询词",
+      anchor: "GDELT 锚定日期",
+      hits: "过去 30 天 GDELT 命中数",
+      recent: "最近事件"
+    }
+  }[language];
+
   if (errorMessage && items.length === 0) {
-    return `GDELT 检索失败：${errorMessage}`;
+    return copy.failed(errorMessage);
   }
 
   if (!items || items.length === 0) {
-    return query
-      ? `GDELT 近 30 天未找到相近新闻事件（关键词：${query}）。`
-      : "GDELT 近 30 天未找到相近新闻事件。";
+    return copy.empty(query);
   }
 
   const lines = items.slice(0, 3).map((item) => {
@@ -794,11 +1495,11 @@ function summarizeGdeltBundle(query, items, errorMessage, anchorDate) {
     const source = item.source ? ` · ${item.source}` : "";
     return `${date}${source} · ${item.title}`;
   });
-  const queryLine = query ? `GDELT 查询词：${query}\n` : "";
+  const queryLine = query ? `${copy.query}: ${query}\n` : "";
   const anchorLine = anchorDate
-    ? `GDELT 锚定日期：${anchorDate.toISOString().slice(0, 10)}\n`
+    ? `${copy.anchor}: ${anchorDate.toISOString().slice(0, 10)}\n`
     : "";
-  return `${queryLine}${anchorLine}GDELT 近 30 天命中 ${items.length} 条；最近事件：\n${lines.join("\n")}`;
+  return `${queryLine}${anchorLine}${copy.hits}: ${items.length}; ${copy.recent}:\n${lines.join("\n")}`;
 }
 
 function extractAnchorDate(input) {
@@ -861,6 +1562,14 @@ function getItemDate(item) {
   return 0;
 }
 
+async function getGdeltCooldownUntil() {
+  if (gdeltCooldownUntil > Date.now()) return gdeltCooldownUntil;
+  const { gdeltCooldownUntil: stored } = await chrome.storage.local.get({ gdeltCooldownUntil: 0 });
+  const value = Number(stored) || 0;
+  gdeltCooldownUntil = value;
+  return value;
+}
+
 function buildGdeltQueries(input) {
   const candidates = [];
   const selection = String(input?.selectionText || "").trim();
@@ -868,33 +1577,37 @@ function buildGdeltQueries(input) {
   const pageText = String(input?.pageText || "").trim();
 
   if (selection) {
-    if (selection.length <= 160) {
-      candidates.push(selection);
-    } else {
-      const selectionKeywords = extractGdeltKeywords(selection);
-      if (selectionKeywords.length > 0) {
-        candidates.push(selectionKeywords.slice(0, 6).join(" "));
-      }
+    const selectionQuery = normalizeGdeltQuery(selection);
+    if (selectionQuery) {
+      candidates.push(selectionQuery);
     }
   }
 
   const combined = [selection, title, pageText.slice(0, 1200)].filter(Boolean).join(" ");
-  const keywords = extractGdeltKeywords(combined);
+  const keywords = extractGdeltKeywords(combined).filter(isValidGdeltQueryToken);
   if (keywords.length > 0) {
     candidates.push(keywords.slice(0, 6).join(" "));
   }
 
   const titleKeywords = extractGdeltKeywords(title);
   if (titleKeywords.length > 0) {
-    candidates.push(titleKeywords.slice(0, 5).join(" "));
+    const titleQuery = titleKeywords.filter(isValidGdeltQueryToken).slice(0, 5).join(" ");
+    if (titleQuery) candidates.push(titleQuery);
   }
 
   const fallback = extractGdeltKeywords(pageText);
   if (fallback.length > 0) {
-    candidates.push(fallback.slice(0, 4).join(" "));
+    const fallbackQuery = fallback.filter(isValidGdeltQueryToken).slice(0, 4).join(" ");
+    if (fallbackQuery) candidates.push(fallbackQuery);
   }
 
   return [...new Set(candidates.map((value) => value.trim()).filter(Boolean))].slice(0, 4);
+}
+
+function normalizeGdeltQuery(text) {
+  const keywords = extractGdeltKeywords(text).filter(isValidGdeltQueryToken);
+  if (keywords.length === 0) return "";
+  return keywords.slice(0, 6).join(" ");
 }
 
 function extractGdeltKeywords(text) {
@@ -944,13 +1657,15 @@ function extractGdeltKeywords(text) {
   ]);
 
   const phraseMatches = normalized.match(/"([^"]{3,80})"/g) || [];
-  const phrases = phraseMatches.map((item) => item.replace(/^"|"$/g, "").trim()).filter(Boolean);
+  const phrases = phraseMatches
+    .map((item) => item.replace(/^"|"$/g, "").trim())
+    .filter((item) => item && item.split(/\s+/).some((part) => part.length >= minGdeltTermLength));
 
   const tokens = normalized
     .split(/[^A-Za-z0-9.$%+/:-]+/)
     .map((item) => item.trim())
     .filter(Boolean)
-    .filter((item) => item.length >= 2)
+    .filter((item) => item.length >= minGdeltTermLength)
     .filter((item) => !stopWords.has(item.toLowerCase()));
 
   const tickerMatches = normalized.match(/\b[A-Z]{2,5}(?:\.[A-Z]{1,2})?\b/g) || [];
@@ -969,6 +1684,14 @@ function extractGdeltKeywords(text) {
   }
 
   return deduped;
+}
+
+function isValidGdeltQueryToken(value) {
+  const token = String(value || "").trim();
+  if (!token) return false;
+  if (/^\d+(?:\.\d+)?%?$/.test(token)) return true;
+  if (/^[A-Z0-9.:-]+$/.test(token) && token.length >= minGdeltTermLength) return true;
+  return token.length >= minGdeltTermLength;
 }
 
 function normalizeRuleScores(ruleScores) {
@@ -1077,6 +1800,12 @@ function pct(v) {
 function formatError(err) {
   const message = String(err?.message || err || "Unknown error");
   return `本地 AI 不可用：${message}`;
+}
+
+function sanitizeModelText(value) {
+  return String(value || "")
+    .replace(/^\uFEFF/, "")
+    .trim();
 }
 
 async function safeReadText(resp) {

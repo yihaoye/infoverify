@@ -42,21 +42,60 @@
         font-size: 12px;
         font-weight: 600;
       }
+      .field {
+        margin-top: 16px;
+      }
+      label {
+        display: block;
+        font-weight: 600;
+        margin-bottom: 8px;
+      }
+      select {
+        width: 100%;
+        border: 1px solid #d1d5db;
+        border-radius: 12px;
+        padding: 10px 12px;
+        font: inherit;
+        background: #fff;
+      }
+      .help {
+        margin-top: 8px;
+        color: #6b7280;
+        font-size: 13px;
+      }
+      .status {
+        margin-top: 12px;
+        font-size: 13px;
+        color: #059669;
+        min-height: 1.2em;
+      }
     </style>
   </head>
   <body>
     <h1>InfoVerify 设置</h1>
     <div class="card">
-      <div class="tag">首发版默认配置</div>
+      <div class="tag">本地 AI 默认</div>
       <p class="muted">
-        当前版本默认只使用 Chrome 内置本地 AI，并自动通过 GDELT 最近新闻做交叉验证。
-        云端 AI 仍然保留为“计划中”，暂不对外开放。
+        当前版本默认使用 Chrome 内置本地 AI，并自动通过 GDELT 最近新闻做交叉验证。
+        提示词和模型输入都使用英文；模型输出语言可在下方选择。
       </p>
       <ul class="list">
-        <li>无需额外 API Key 或后端地址。</li>
         <li>右键选中文本时会优先分析选中文本；未选中时会分析当前页面。</li>
         <li>本地 AI 输出会结合三原则：可重复性、交叉验证、内容具体性。</li>
       </ul>
+      <div class="field">
+        <label for="outputLanguage">模型输出语言</label>
+        <select id="outputLanguage">
+          <option value="auto">自动（按浏览器语言）</option>
+          <option value="en">English</option>
+          <option value="es">Español</option>
+          <option value="ja">日本語</option>
+          <option value="zh">中文</option>
+        </select>
+        <div class="help">本地 AI 仍使用英文提示词；中文输出会在本地翻译层生成。</div>
+      </div>
+      <div class="status" id="saveStatus" aria-live="polite"></div>
     </div>
+    <script src="./options.js"></script>
   </body>
 </html>

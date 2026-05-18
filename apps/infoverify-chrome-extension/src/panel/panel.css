@@ -371,3 +371,44 @@ body {
   overflow-wrap: anywhere;
   word-break: break-word;
 }
+
+.cardHeaderRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.debugCopyButton {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text);
+  font: inherit;
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.debugCopyButton:hover {
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+.debugStatus {
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.debugTrace {
+  margin: 10px 0 0;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.24);
+  border: 1px solid var(--border);
+  color: #d7ddff;
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 320px;
+  overflow: auto;
+  font: 11px/1.45 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+}
