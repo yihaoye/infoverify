@@ -10,7 +10,7 @@ import (
 
 	"github.com/yihaoye/infoverify/internal/dal/postgres"
 	"github.com/yihaoye/infoverify/internal/model"
-	"github.com/yihaoye/infoverify/internal/service/core/cross_validation_text"
+	"github.com/yihaoye/infoverify/internal/service/core/cross_validation"
 	"github.com/yihaoye/infoverify/internal/service/core/dikw"
 	"github.com/yihaoye/infoverify/internal/service/core/llm_assess"
 	"github.com/yihaoye/infoverify/internal/service/core/reproducible"
@@ -134,7 +134,7 @@ func HandleScoreRequest(w http.ResponseWriter, r *http.Request) {
 		},
 	}
 
-	cvRes, _ := (cross_validation_text.Skill{}).Evaluate(ctx, in)
+	cvRes, _ := (cross_validation.Skill{}).Evaluate(ctx, in)
 	repRes, _ := (reproducible.Skill{}).Evaluate(ctx, in)
 	detailRes, _ := (dikw.Skill{}).Evaluate(ctx, in)
 

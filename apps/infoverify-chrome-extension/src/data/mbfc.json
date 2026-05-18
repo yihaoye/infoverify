@@ -1,0 +1,306 @@
+{
+  "version": "2026-05-16",
+  "source": "MBFC static dataset subset from public MBFC ratings page / public gist mirror",
+  "domains": {
+    "reuters.com": {
+      "label": "Reuters",
+      "country": "UK",
+      "mbfc_page": "leastbiased03",
+      "bias": "center",
+      "factual": "Veryhigh",
+      "ideology": "C",
+      "rating": "Veryhigh",
+      "url": "https://www.reuters.com"
+    },
+    "apnews.com": {
+      "label": "Associated Press",
+      "country": "USA",
+      "mbfc_page": "leastbiased01",
+      "bias": "center",
+      "factual": "Veryhigh",
+      "ideology": "C",
+      "rating": "Veryhigh",
+      "url": "https://apnews.com/"
+    },
+    "bloomberg.com": {
+      "label": "Bloomberg News",
+      "country": "USA",
+      "mbfc_page": "leftcenter10",
+      "bias": "left-center",
+      "factual": "MostlyFactual",
+      "ideology": "LC",
+      "rating": "MostlyFactual",
+      "url": "https://www.bloomberg.com/"
+    },
+    "cnbc.com": {
+      "label": "CNBC",
+      "country": "USA",
+      "mbfc_page": "leftcenter06",
+      "bias": "left-center",
+      "factual": "MostlyFactual",
+      "ideology": "LC",
+      "rating": "MostlyFactual",
+      "url": "https://www.cnbc.com/"
+    },
+    "businessinsider.com": {
+      "label": "Business Insider",
+      "country": "USA",
+      "mbfc_page": "leftcenter06",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "http://www.businessinsider.com/"
+    },
+    "ft.com": {
+      "label": "Financial Times",
+      "country": "UK",
+      "mbfc_page": "leastbiased07",
+      "bias": "center",
+      "factual": "High",
+      "ideology": "C",
+      "rating": "High",
+      "url": "https://www.ft.com/"
+    },
+    "wsj.com": {
+      "label": "Wall Street Journal",
+      "country": "USA",
+      "mbfc_page": "rightcenter01",
+      "bias": "right-center",
+      "factual": "MostlyFactual",
+      "ideology": "RC",
+      "rating": "MostlyFactual",
+      "url": "https://www.wsj.com"
+    },
+    "barrons.com": {
+      "label": "Barron's",
+      "country": "USA",
+      "mbfc_page": "rightcenter09",
+      "bias": "right-center",
+      "factual": "High",
+      "ideology": "RC",
+      "rating": "High",
+      "url": "https://www.barrons.com"
+    },
+    "marketwatch.com": {
+      "label": "MarketWatch",
+      "country": "USA",
+      "mbfc_page": "rightcenter11",
+      "bias": "right-center",
+      "factual": "High",
+      "ideology": "RC",
+      "rating": "High",
+      "url": "https://www.marketwatch.com/"
+    },
+    "fortune.com": {
+      "label": "Fortune Magazine",
+      "country": "USA",
+      "mbfc_page": "rightcenter09",
+      "bias": "right-center",
+      "factual": "High",
+      "ideology": "RC",
+      "rating": "High",
+      "url": "http://fortune.com"
+    },
+    "forbes.com": {
+      "label": "Forbes",
+      "country": "USA",
+      "mbfc_page": "rightcenter04",
+      "bias": "right-center",
+      "factual": "MostlyFactual",
+      "ideology": "RC",
+      "rating": "MostlyFactual",
+      "url": "https://www.forbes.com"
+    },
+    "thestreet.com": {
+      "label": "TheStreet",
+      "country": "USA",
+      "mbfc_page": "rightcenter11",
+      "bias": "right-center",
+      "factual": "High",
+      "ideology": "RC",
+      "rating": "High",
+      "url": "https://www.thestreet.com/"
+    },
+    "economist.com": {
+      "label": "The Economist",
+      "country": "UK",
+      "mbfc_page": "leastbiased07",
+      "bias": "center",
+      "factual": "High",
+      "ideology": "C",
+      "rating": "High",
+      "url": "https://www.economist.com/"
+    },
+    "nytimes.com": {
+      "label": "New York Times",
+      "country": "USA",
+      "mbfc_page": "leftcenter06",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://www.nytimes.com/"
+    },
+    "npr.org": {
+      "label": "NPR (National Public Radio)",
+      "country": "USA",
+      "mbfc_page": "leftcenter09",
+      "bias": "left-center",
+      "factual": "Veryhigh",
+      "ideology": "LC",
+      "rating": "Veryhigh",
+      "url": "https://www.npr.org/sections/news/"
+    },
+    "cnn.com": {
+      "label": "CNN",
+      "country": "USA",
+      "mbfc_page": "left10",
+      "bias": "left",
+      "factual": "Mixed",
+      "ideology": "L",
+      "rating": "Mixed",
+      "url": "https://edition.cnn.com/"
+    },
+    "time.com": {
+      "label": "Time Magazine",
+      "country": "USA",
+      "mbfc_page": "leftcenter01",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://time.com/"
+    },
+    "newyorker.com": {
+      "label": "New Yorker",
+      "country": "USA",
+      "mbfc_page": "left7",
+      "bias": "left",
+      "factual": "High",
+      "ideology": "L",
+      "rating": "High",
+      "url": "https://www.newyorker.com/"
+    },
+    "newrepublic.com": {
+      "label": "New Republic",
+      "country": "USA",
+      "mbfc_page": "left6",
+      "bias": "left",
+      "factual": "High",
+      "ideology": "L",
+      "rating": "High",
+      "url": "https://newrepublic.com/"
+    },
+    "nymag.com": {
+      "label": "New York Magazine",
+      "country": "USA",
+      "mbfc_page": "left9",
+      "bias": "left",
+      "factual": "High",
+      "ideology": "L",
+      "rating": "High",
+      "url": "http://nymag.com/"
+    },
+    "washingtonpost.com": {
+      "label": "Washington Post",
+      "country": "USA",
+      "mbfc_page": "leftcenter04",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://www.washingtonpost.com/"
+    },
+    "nydailynews.com": {
+      "label": "New York Daily News",
+      "country": "USA",
+      "mbfc_page": "leftcenter04",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://www.nydailynews.com/"
+    },
+    "cnet.com": {
+      "label": "CNET",
+      "country": "USA",
+      "mbfc_page": "leastbiased04",
+      "bias": "center",
+      "factual": "High",
+      "ideology": "C",
+      "rating": "High",
+      "url": "https://www.cnet.com/"
+    },
+    "arstechnica.com": {
+      "label": "Ars Technica",
+      "country": "USA",
+      "mbfc_page": "leastbiased03",
+      "bias": "center",
+      "factual": "High",
+      "ideology": "C",
+      "rating": "High",
+      "url": "https://arstechnica.com"
+    },
+    "factcheck.org": {
+      "label": "FactCheck.org",
+      "country": "USA",
+      "mbfc_page": "leastbiased05",
+      "bias": "center",
+      "factual": "Veryhigh",
+      "ideology": "C",
+      "rating": "Veryhigh",
+      "url": "https://www.factcheck.org/"
+    },
+    "gallup.com": {
+      "label": "Gallup",
+      "country": "USA",
+      "mbfc_page": "leastbiased04",
+      "bias": "center",
+      "factual": "Veryhigh",
+      "ideology": "C",
+      "rating": "Veryhigh",
+      "url": "https://news.gallup.com"
+    },
+    "csmonitor.com": {
+      "label": "Christian Science Monitor",
+      "country": "USA",
+      "mbfc_page": "leastbiased02",
+      "bias": "center",
+      "factual": "High",
+      "ideology": "C",
+      "rating": "High",
+      "url": "http://www.csmonitor.com/"
+    },
+    "news.sky.com": {
+      "label": "Sky News",
+      "country": "UK",
+      "mbfc_page": "leastbiased02",
+      "bias": "center",
+      "factual": "High",
+      "ideology": "C",
+      "rating": "High",
+      "url": "https://news.sky.com"
+    },
+    "rollcall.com": {
+      "label": "Roll Call",
+      "country": "USA",
+      "mbfc_page": "leastbiased02",
+      "bias": "center",
+      "factual": "Veryhigh",
+      "ideology": "C",
+      "rating": "Veryhigh",
+      "url": "https://www.rollcall.com"
+    },
+    "bbc.com": {
+      "label": "BBC News",
+      "country": "UK",
+      "mbfc_page": "leastbiased03",
+      "bias": "center",
+      "factual": "Veryhigh",
+      "ideology": "C",
+      "rating": "Veryhigh",
+      "url": "https://www.bbc.com/news"
+    }
+  }
+}

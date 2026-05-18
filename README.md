@@ -104,27 +104,10 @@ export CF_BR_BASE_URL="https://api.cloudflare.com/client/v4"
 Chrome 插件（开发者模式加载）在这里：
 `apps/infoverify-chrome-extension`
 
-轻量打分（不入库、不抓取）：输入文本 -> 三大原则分项分数 + 总分：
-```bash
-curl -X POST http://localhost:8080/api/basic/score \
-  -H "Content-Type: application/json" \
-  -d '{"text":"According to https://example.com/report revenue grew 20% YoY.","url":"https://news.example.com"}'
-```
+首发版默认只用 Chrome 内置本地 AI，并自动用 GDELT 最近新闻做交叉验证；本地模式会按可重复性、交叉验证、内容具体性三原则评分并给出结论。可重复性会进一步结合插件内静态 MBFC 域名信誉表与 GDELT 时间线。云端 AI 暂时仅保留计划入口。
 
-URL 模式（先抓取 URL 正文，再打分；受 allowlist 限制）：
-```bash
-curl -X POST http://localhost:8080/api/basic/score \
-  -H "Content-Type: application/json" \
-  -d '{"url":"https://example.com/article"}'
-```
-
-可选：让 Gemini 额外输出一个“独立可信度评估”（与三原则分开），在请求体加 `llm=true`：
-```bash
-curl -X POST http://localhost:8080/api/basic/score \
-  -H "Content-Type: application/json" \
-  -d '{"text":"...","llm":true}'
-```
-需要先配置 `GEMINI_API_KEY`（见上面的 Gemini 配置段落）。
+插件首发版不需要后端、不需要 API Key，也不需要额外配置。
+插件设置页可选择模型输出语言；本地 AI 的提示词和模型输入统一使用英文，当前支持英文、西班牙语、日语和中文输出（中文通过本地翻译层生成）。
 
 ## Milestone
 * [ ] Article

@@ -27,8 +27,23 @@ body {
 }
 
 .header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
   padding: 14px 14px 10px;
   border-bottom: 1px solid var(--border);
+}
+
+.headerCopy {
+  min-width: 0;
+}
+
+.titleRow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }
 
 .title {
@@ -36,10 +51,67 @@ body {
   letter-spacing: 0.2px;
 }
 
+.headerPill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 999px;
+  border: 1px solid rgba(45, 212, 191, 0.35);
+  color: var(--good);
+  background: rgba(45, 212, 191, 0.08);
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
 .subtitle {
   margin-top: 2px;
   color: var(--muted);
   font-size: 12px;
+}
+
+.modeSwitcher {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.modeButton {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 7px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--muted);
+  cursor: pointer;
+  font-weight: 600;
+  transition:
+    transform 120ms ease,
+    border-color 120ms ease,
+    background 120ms ease,
+    color 120ms ease;
+}
+
+.modeButton:hover {
+  transform: translateY(-1px);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+.modeButton.active {
+  color: var(--text);
+  border-color: rgba(45, 212, 191, 0.45);
+  background: rgba(45, 212, 191, 0.12);
+}
+
+.modeButton:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+  transform: none;
+}
+
+.modeButton:disabled:hover {
+  transform: none;
+  border-color: var(--border);
 }
 
 .main {
@@ -208,10 +280,12 @@ body {
   border-color: rgba(45, 212, 191, 0.45);
   color: var(--good);
 }
+
 .pill.bad {
   border-color: rgba(251, 113, 133, 0.45);
   color: var(--bad);
 }
+
 .pill.warn {
   border-color: rgba(251, 191, 36, 0.45);
   color: var(--warn);
@@ -227,6 +301,39 @@ body {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;
+}
+
+.principleList {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.principleRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.principleLabel {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.principleValue {
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.principleNote {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .evidence {
@@ -260,19 +367,6 @@ body {
 .evidenceQuote {
   color: var(--muted);
   font-size: 12px;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  word-break: break-word;
-}
-
-.json {
-  margin: 0;
-  max-height: 240px;
-  overflow: auto;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 10px;
-  background: rgba(0, 0, 0, 0.18);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   word-break: break-word;

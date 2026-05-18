@@ -10,6 +10,7 @@ import (
 
 	"github.com/yihaoye/infoverify/internal/clients"
 	"github.com/yihaoye/infoverify/internal/model"
+	"github.com/yihaoye/infoverify/internal/service/core/cross_validation"
 	"github.com/yihaoye/infoverify/internal/service/core/dikw"
 	"github.com/yihaoye/infoverify/internal/service/core/reproducible"
 	"github.com/yihaoye/infoverify/internal/service/core/skill"
@@ -265,7 +266,7 @@ func runCoreSkills(ctx context.Context, article model.Article) []skill.Result {
 
 	d := dikw.Skill{}
 	r := reproducible.Skill{}
-	cv := skill.Result{Skill: "cross_validation", Score: 0, Weight: 0.3, Summary: "not implemented"}
+	cvSkill := cross_validation.Skill{}
 
 	if res, err := d.Evaluate(ctx, skill.Input{Article: article}); err == nil {
 		// 细节丰富度。
@@ -287,7 +288,15 @@ func runCoreSkills(ctx context.Context, article model.Article) []skill.Result {
 		}
 		results = append(results, res)
 	}
-	results = append(results, cv)
+	if res, err := cvSkill.Evaluate(ctx, skill.Input{Article: article}); err == nil {
+		if res.Skill == "" {
+			res.Skill = cvSkill.Name()
+		}
+		if res.Weight == 0 {
+			res.Weight = cvSkill.Weight()
+		}
+		results = append(results, res)
+	}
 
 	return results
 }

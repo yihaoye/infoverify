@@ -2,9 +2,12 @@
   "manifest_version": 3,
   "name": "InfoVerify",
   "version": "0.1.0",
-  "description": "Verify selected text and show evidence in a side panel.",
+  "description": "Verify selected text or current page with local AI and GDELT cross-validation in a side panel.",
+  "minimum_chrome_version": "138",
   "permissions": ["contextMenus", "storage", "sidePanel", "activeTab"],
-  "host_permissions": ["https://infoverify.dpdns.org/*"],
+  "host_permissions": [
+    "https://api.gdeltproject.org/*"
+  ],
   "background": {
     "service_worker": "src/background.js",
     "type": "module"

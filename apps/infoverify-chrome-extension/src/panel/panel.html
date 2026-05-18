@@ -8,8 +8,18 @@
   </head>
   <body>
     <header class="header">
-      <div class="title">InfoVerify</div>
-      <div class="subtitle">选中文本则核实文本；否则核实当前页 URL</div>
+      <div class="headerCopy">
+        <div class="titleRow">
+          <div class="title">InfoVerify</div>
+          <span class="headerPill" id="modePill">本地 AI</span>
+        </div>
+        <div class="subtitle">默认使用本地 AI；会自动用 GDELT 最近新闻做交叉验证。云端 AI 计划中。</div>
+      </div>
+
+      <div class="modeSwitcher" role="group" aria-label="AI 模式切换">
+        <button class="modeButton active" id="localModeButton" type="button">本地 AI</button>
+        <button class="modeButton" id="cloudModeButton" type="button" disabled>云端 AI（计划中）</button>
+      </div>
     </header>
 
     <main class="main">
@@ -43,17 +53,41 @@
       </section>
 
       <section class="card">
+        <div class="cardTitle">各指标评分</div>
+        <div class="principleList">
+          <div class="principleRow">
+            <div class="principleLabel">可重复性</div>
+            <div class="principleValue" id="reproScore">—</div>
+          </div>
+          <div class="principleRow">
+            <div class="principleLabel">交叉验证</div>
+            <div class="principleValue" id="crossScore">—</div>
+          </div>
+          <div class="principleRow">
+            <div class="principleLabel">内容具体性</div>
+            <div class="principleValue" id="detailScore">—</div>
+          </div>
+        </div>
+        <div class="summary principleNote" id="principleNote">—</div>
+      </section>
+
+      <section class="card">
         <div class="cardTitle">证据</div>
         <div class="evidence" id="evidence"></div>
       </section>
 
       <section class="card">
-        <div class="cardTitle">LLM 评估（Gemini，可选）</div>
+        <div class="cardTitle">AI 评估</div>
         <div class="verdictRow">
           <span class="pill" id="llmVerdictPill">—</span>
           <span class="confidence" id="llmConfidence">—</span>
         </div>
         <div class="summary" id="llmRationale">—</div>
+      </section>
+
+      <section class="card">
+        <div class="cardTitle">GDELT 交叉验证</div>
+        <div class="summary" id="gdeltSummary">—</div>
       </section>
     </main>
 
