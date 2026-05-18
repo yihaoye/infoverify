@@ -7,10 +7,12 @@ const summaryEl = document.getElementById("summary");
 const reproScoreEl = document.getElementById("reproScore");
 const crossScoreEl = document.getElementById("crossScore");
 const detailScoreEl = document.getElementById("detailScore");
-const principleNoteEl = document.getElementById("principleNote");
 const reproSummaryEl = document.getElementById("reproSummary");
+const reproNoteEl = document.getElementById("reproNote");
 const crossSummaryEl = document.getElementById("crossSummary");
+const crossNoteEl = document.getElementById("crossNote");
 const detailSummaryEl = document.getElementById("detailSummary");
+const detailNoteEl = document.getElementById("detailNote");
 const evidenceEl = document.getElementById("evidence");
 const gdeltSummaryEl = document.getElementById("gdeltSummary");
 const llmVerdictPillEl = document.getElementById("llmVerdictPill");
@@ -234,7 +236,7 @@ async function translateArray(values, sourceLanguage, targetLanguage, signal) {
   if (!Array.isArray(values) || values.length === 0) return Array.isArray(values) ? [] : [];
   const translated = [];
   for (const value of values) {
-    translated.push(await translateText(value, sourceLanguage, targetLanguage, signal));
+    translated.push(await shouldTranslateText(value, sourceLanguage, targetLanguage, signal));
   }
   return translated;
 }
@@ -244,37 +246,37 @@ async function localizeAssessmentResult(result, targetLanguage, signal) {
   const sourceLanguage = "en";
   const localized = {
     ...result,
-    summary: await translateText(result.summary, sourceLanguage, targetLanguage, signal),
-    rationale: await translateText(result.rationale, sourceLanguage, targetLanguage, signal),
-    gdelt_summary: await translateText(result.gdelt_summary, sourceLanguage, targetLanguage, signal),
-    reproducibility_summary: await translateText(result.reproducibility_summary, sourceLanguage, targetLanguage, signal),
-    cross_validation_summary: await translateText(result.cross_validation_summary, sourceLanguage, targetLanguage, signal),
-    specificity_summary: await translateText(result.specificity_summary, sourceLanguage, targetLanguage, signal),
+    summary: await shouldTranslateText(result.summary, sourceLanguage, targetLanguage, signal),
+    rationale: await shouldTranslateText(result.rationale, sourceLanguage, targetLanguage, signal),
+    gdelt_summary: await shouldTranslateText(result.gdelt_summary, sourceLanguage, targetLanguage, signal),
+    reproducibility_summary: await shouldTranslateText(result.reproducibility_summary, sourceLanguage, targetLanguage, signal),
+    cross_validation_summary: await shouldTranslateText(result.cross_validation_summary, sourceLanguage, targetLanguage, signal),
+    specificity_summary: await shouldTranslateText(result.specificity_summary, sourceLanguage, targetLanguage, signal),
     conflicts: await translateArray(result.conflicts, sourceLanguage, targetLanguage, signal),
     missing: await translateArray(result.missing, sourceLanguage, targetLanguage, signal),
     evidence: Array.isArray(result.evidence)
       ? await Promise.all(result.evidence.map(async (item) => ({
           ...item,
-          title: await translateText(item?.title, sourceLanguage, targetLanguage, signal),
-          quote: await translateText(item?.quote, sourceLanguage, targetLanguage, signal)
+          title: await shouldTranslateText(item?.title, sourceLanguage, targetLanguage, signal),
+          quote: await shouldTranslateText(item?.quote, sourceLanguage, targetLanguage, signal)
         })))
       : result.evidence
   };
 
   if (localized.rule_notes) {
     localized.rule_notes = {
-      reproducibility: await translateText(result.rule_notes?.reproducibility || "", sourceLanguage, targetLanguage, signal),
-      cross_validation: await translateText(result.rule_notes?.cross_validation || "", sourceLanguage, targetLanguage, signal),
-      detail_richness: await translateText(result.rule_notes?.detail_richness || "", sourceLanguage, targetLanguage, signal)
+      reproducibility: await shouldTranslateText(result.rule_notes?.reproducibility || "", sourceLanguage, targetLanguage, signal),
+      cross_validation: await shouldTranslateText(result.rule_notes?.cross_validation || "", sourceLanguage, targetLanguage, signal),
+      detail_richness: await shouldTranslateText(result.rule_notes?.detail_richness || "", sourceLanguage, targetLanguage, signal)
     };
   }
 
   if (localized.llm_assessment) {
     localized.llm_assessment = {
       ...result.llm_assessment,
-      rationale: await translateText(result.llm_assessment?.rationale || "", sourceLanguage, targetLanguage, signal),
-      summary: await translateText(result.llm_assessment?.summary || "", sourceLanguage, targetLanguage, signal),
-      error: await translateText(result.llm_assessment?.error || "", sourceLanguage, targetLanguage, signal)
+      rationale: await shouldTranslateText(result.llm_assessment?.rationale || "", sourceLanguage, targetLanguage, signal),
+      summary: await shouldTranslateText(result.llm_assessment?.summary || "", sourceLanguage, targetLanguage, signal),
+      error: await shouldTranslateText(result.llm_assessment?.error || "", sourceLanguage, targetLanguage, signal)
     };
   }
 
@@ -458,11 +460,9 @@ function renderRuleScores(ruleScores, ruleNotes, extraContext = {}) {
   crossSummaryEl.textContent = extraContext.cross_validation || "—";
   detailSummaryEl.textContent = extraContext.specificity || "—";
 
-  const notes = [];
-  if (ruleNotes?.reproducibility) notes.push(`可重复性：${ruleNotes.reproducibility}`);
-  if (ruleNotes?.cross_validation) notes.push(`交叉验证：${ruleNotes.cross_validation}`);
-  if (ruleNotes?.detail_richness) notes.push(`内容具体性：${ruleNotes.detail_richness}`);
-  principleNoteEl.textContent = notes.length > 0 ? notes.join(" · ") : "—";
+  reproNoteEl.textContent = ruleNotes?.reproducibility || "—";
+  crossNoteEl.textContent = ruleNotes?.cross_validation || "—";
+  detailNoteEl.textContent = ruleNotes?.detail_richness || "—";
 }
 
 function setVerdict(verdict, confidence) {
@@ -1223,6 +1223,22 @@ function formatDateOnly(value) {
 
 function yesNo(value) {
   return value ? "有" : "无";
+}
+
+function isLikelyLocalized(text, targetLanguage) {
+  const value = String(text || "");
+  if (!value) return false;
+  if (targetLanguage === "zh") return /[\u4E00-\u9FFF]/.test(value);
+  if (targetLanguage === "ja") return /[\u3040-\u30FF\u4E00-\u9FFF]/.test(value);
+  if (targetLanguage === "es") return /[áéíóúñ¿¡]/i.test(value);
+  return false;
+}
+
+async function shouldTranslateText(value, sourceLanguage, targetLanguage, signal) {
+  const text = String(value || "");
+  if (!text) return text;
+  if (isLikelyLocalized(text, targetLanguage)) return text;
+  return await translateText(text, sourceLanguage, targetLanguage, signal);
 }
 
 function buildFallbackEvidence(input) {
