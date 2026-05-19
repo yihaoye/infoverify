@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -72,27 +72,27 @@
     </style>
   </head>
   <body>
-    <h1>InfoVerify 设置</h1>
+    <h1>InfoVerify Settings</h1>
     <div class="card">
-      <div class="tag">本地 AI 默认</div>
+      <div class="tag">Local AI by default</div>
       <p class="muted">
-        当前版本默认使用 Chrome 内置本地 AI，并自动通过 GDELT 最近新闻做交叉验证。
-        提示词和模型输入都使用英文；模型输出语言可在下方选择。
+        This version uses Chrome built-in local AI by default and automatically cross-validates with recent GDELT news.
+        Prompts and model inputs use English; model output language can be selected below.
       </p>
       <ul class="list">
-        <li>右键选中文本时会优先分析选中文本；未选中时会分析当前页面。</li>
-        <li>本地 AI 输出会结合三原则：可重复性、交叉验证、内容具体性。</li>
+        <li>When text is selected, it will verify the selection first; otherwise it will analyze the current page.</li>
+        <li>Local AI output is scored by repeatability, cross-validation, and detail.</li>
       </ul>
       <div class="field">
-        <label for="outputLanguage">模型输出语言</label>
+        <label for="outputLanguage">Output language</label>
         <select id="outputLanguage">
-          <option value="auto">自动（按浏览器语言）</option>
+          <option value="auto">Auto (browser language)</option>
           <option value="en">English</option>
-          <option value="es">Español</option>
-          <option value="ja">日本語</option>
-          <option value="zh">中文</option>
+          <option value="es">Spanish</option>
+          <option value="ja">Japanese</option>
+          <option value="zh">Chinese</option>
         </select>
-        <div class="help">本地 AI 仍使用英文提示词；中文输出会在本地翻译层生成。</div>
+        <div class="help">Local AI still uses English prompts; Chinese output is generated through a local translation layer.</div>
       </div>
       <div class="status" id="saveStatus" aria-live="polite"></div>
     </div>

@@ -12,9 +12,9 @@ async function saveSettings() {
   await chrome.storage.sync.set({
     outputLanguage: outputLanguageEl.value || "auto"
   });
-  saveStatusEl.textContent = "已保存";
+  saveStatusEl.textContent = "Saved";
   window.setTimeout(() => {
-    if (saveStatusEl.textContent === "已保存") {
+    if (saveStatusEl.textContent === "Saved") {
       saveStatusEl.textContent = "";
     }
   }, 1500);
@@ -25,5 +25,5 @@ outputLanguageEl.addEventListener("change", () => {
 });
 
 loadSettings().catch(() => {
-  saveStatusEl.textContent = "加载设置失败";
+  saveStatusEl.textContent = "Failed to load settings";
 });

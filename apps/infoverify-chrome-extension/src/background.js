@@ -3,7 +3,7 @@ const MENU_ID_VERIFY = "infoverify.verifySelection";
 chrome.runtime.onInstalled.addListener(async () => {
   chrome.contextMenus.create({
     id: MENU_ID_VERIFY,
-    title: "核实选中文本或当前页面",
+    title: "Verify selected text or current page",
     contexts: ["selection", "page"]
   });
 

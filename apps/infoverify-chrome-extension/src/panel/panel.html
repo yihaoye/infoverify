@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="zh-CN">
+<html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -11,14 +11,14 @@
       <div class="headerCopy">
         <div class="titleRow">
           <div class="title">InfoVerify</div>
-          <span class="headerPill" id="modePill">本地 AI</span>
+          <span class="headerPill" id="modePill">Local AI</span>
         </div>
-        <div class="subtitle">默认使用本地 AI；会自动用 GDELT 最近新闻做交叉验证。云端 AI 计划中。</div>
+        <div class="subtitle">Uses local AI by default with automatic GDELT cross-validation. Cloud AI is planned.</div>
       </div>
 
-      <div class="modeSwitcher" role="group" aria-label="AI 模式切换">
-        <button class="modeButton active" id="localModeButton" type="button">本地 AI</button>
-        <button class="modeButton" id="cloudModeButton" type="button" disabled>云端 AI（计划中）</button>
+      <div class="modeSwitcher" role="group" aria-label="AI mode switch">
+        <button class="modeButton active" id="localModeButton" type="button">Local AI</button>
+        <button class="modeButton" id="cloudModeButton" type="button" disabled>Cloud AI (Planned)</button>
       </div>
     </header>
 
@@ -27,7 +27,7 @@
         <div class="thinkingGlow"></div>
         <div class="thinkingContent">
           <div class="thinkingLabel">Thinking</div>
-          <div class="thinkingText" id="thinkingText">正在推理...</div>
+          <div class="thinkingText" id="thinkingText">Analyzing...</div>
         </div>
         <div class="thinkingBars" aria-hidden="true">
           <span></span>
@@ -37,7 +37,7 @@
       </section>
 
       <section class="card">
-        <div class="cardTitle">结论</div>
+        <div class="cardTitle">Conclusion</div>
         <div class="verdictRow">
           <span class="pill" id="verdictPill">—</span>
           <span class="confidence" id="confidence">—</span>
@@ -46,7 +46,7 @@
       </section>
 
       <section class="card">
-        <div class="cardTitle">AI 评估</div>
+        <div class="cardTitle">AI Assessment</div>
         <div class="verdictRow">
           <span class="pill" id="llmVerdictPill">—</span>
           <span class="confidence" id="llmConfidence">—</span>
@@ -55,9 +55,9 @@
       </section>
 
       <section class="card">
-        <div class="cardTitle">可重复性</div>
+        <div class="cardTitle">Reproducibility</div>
         <div class="principleRow">
-          <div class="principleLabel">得分</div>
+          <div class="principleLabel">Score</div>
           <div class="principleValue" id="reproScore">—</div>
         </div>
         <div class="summary principleNote" id="reproSummary">—</div>
@@ -65,23 +65,23 @@
       </section>
 
       <section class="card">
-        <div class="cardTitle">交叉验证</div>
+        <div class="cardTitle">Cross-validation</div>
         <div class="principleRow">
-          <div class="principleLabel">得分</div>
+          <div class="principleLabel">Score</div>
           <div class="principleValue" id="crossScore">—</div>
         </div>
         <div class="summary principleNote" id="crossSummary">—</div>
-        <div class="sectionSubtitle">证据</div>
+        <div class="sectionSubtitle">Evidence</div>
         <div class="evidence" id="evidence"></div>
-        <div class="sectionSubtitle">GDELT 交叉验证</div>
+        <div class="sectionSubtitle">GDELT cross-validation</div>
         <div class="summary" id="gdeltSummary">—</div>
         <div class="summary principleNote" id="crossNote">—</div>
       </section>
 
       <section class="card">
-        <div class="cardTitle">内容具体性</div>
+        <div class="cardTitle">Detail Specificity</div>
         <div class="principleRow">
-          <div class="principleLabel">得分</div>
+          <div class="principleLabel">Score</div>
           <div class="principleValue" id="detailScore">—</div>
         </div>
         <div class="summary principleNote" id="detailSummary">—</div>
@@ -90,8 +90,8 @@
 
       <section class="card debugCard" id="debugCard" hidden>
         <div class="cardHeaderRow">
-          <div class="cardTitle">调试信息</div>
-          <button class="debugCopyButton" id="debugCopyButton" type="button">复制</button>
+          <div class="cardTitle">Debug Info</div>
+          <button class="debugCopyButton" id="debugCopyButton" type="button">Copy</button>
         </div>
         <div class="debugStatus" id="debugStatus">—</div>
         <pre class="debugTrace" id="debugTrace"></pre>

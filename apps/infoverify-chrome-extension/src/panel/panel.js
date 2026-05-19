@@ -79,14 +79,14 @@ localModeButtonEl.addEventListener("click", () => {
 debugCopyButtonEl.addEventListener("click", () => {
   if (!lastDebugTrace) return;
   void navigator.clipboard?.writeText?.(lastDebugTrace).then(() => {
-    debugStatusEl.textContent = "已复制到剪贴板";
+    debugStatusEl.textContent = "Copied to clipboard";
     window.setTimeout(() => {
-      if (debugStatusEl.textContent === "已复制到剪贴板") {
+      if (debugStatusEl.textContent === "Copied to clipboard") {
         debugStatusEl.textContent = "—";
       }
     }, 1500);
   }).catch(() => {
-    debugStatusEl.textContent = "复制失败，请手动全选后复制";
+    debugStatusEl.textContent = "Copy failed, please select and copy manually";
   });
 });
 
@@ -190,7 +190,7 @@ function setDebugTrace(trace) {
 
   debugCardEl.hidden = false;
   debugTraceEl.textContent = lastDebugTrace;
-  debugStatusEl.textContent = "可复制后贴给我排查";
+  debugStatusEl.textContent = "Copy this and paste it here for troubleshooting";
 }
 
 let translatorCache = new Map();
@@ -286,7 +286,7 @@ async function localizeAssessmentResult(result, targetLanguage, signal) {
 function updateModeButtons() {
   localModeButtonEl.classList.toggle("active", true);
   cloudModeButtonEl.classList.toggle("active", false);
-  modePillEl.textContent = "本地 AI";
+  modePillEl.textContent = "Local AI";
 }
 
 function setLoading(loading) {
@@ -299,9 +299,9 @@ function setLoading(loading) {
     thinkingBannerEl.classList.add("active");
     if (statusEl) {
       statusEl.classList.add("thinking");
-      setStatus("正在调用本地 AI");
+      setStatus("Calling local AI...");
     }
-    thinkingTextEl.textContent = "正在分析文本、搜索 GDELT 新闻并生成本地结论";
+    thinkingTextEl.textContent = "Analyzing text, searching GDELT news, and generating a local conclusion";
     updateModeButtons();
     return;
   }
@@ -313,7 +313,7 @@ function setLoading(loading) {
     if (statusEl) {
       statusEl.classList.remove("thinking");
     }
-    thinkingTextEl.textContent = "已完成";
+    thinkingTextEl.textContent = "Done";
     loadingHideTimer = 0;
   }, remaining);
 }
@@ -436,7 +436,7 @@ async function startVerification(verification, { allowDownload = false } = {}) {
 function renderVerification(payload) {
   updateModeButtons();
   setLoading(false);
-  setStatus("已完成");
+  setStatus("Done");
   setVerdict(payload.verdict, payload.confidence);
   summaryEl.textContent = payload.summary || "—";
   renderRuleScores(payload.rule_scores || null, payload.rule_notes || null, {
@@ -473,7 +473,7 @@ function setVerdict(verdict, confidence) {
   else if (verdict === "unclear") verdictPillEl.classList.add("warn");
 
   confidenceEl.textContent =
-    typeof confidence === "number" ? `置信度 ${(confidence * 100).toFixed(0)}%` : "—";
+    typeof confidence === "number" ? `Confidence ${(confidence * 100).toFixed(0)}%` : "—";
 }
 
 function setLLMAssessment(assess) {
@@ -485,9 +485,9 @@ function setLLMAssessment(assess) {
   else if (verdict === "medium" || verdict === "unclear") llmVerdictPillEl.classList.add("warn");
 
   llmConfidenceEl.textContent =
-    typeof assess?.confidence === "number" ? `置信度 ${(assess.confidence * 100).toFixed(0)}%` : "—";
+    typeof assess?.confidence === "number" ? `Confidence ${(assess.confidence * 100).toFixed(0)}%` : "—";
 
-  if (assess?.error) llmRationaleEl.textContent = `不可用：${assess.error}`;
+  if (assess?.error) llmRationaleEl.textContent = `Unavailable: ${assess.error}`;
   else llmRationaleEl.textContent = assess?.rationale || assess?.summary || "—";
 }
 
@@ -524,7 +524,7 @@ function renderEvidence(evidence) {
 async function runLocalAnalysis(input, signal, { allowDownload = false } = {}) {
   const api = globalThis.LanguageModel;
   if (!api) {
-    throw new Error("Chrome 内置 AI 不可用，请稍后重试");
+    throw new Error("Chrome built-in AI is unavailable; please try again later");
   }
 
   const outputLanguage = await getPreferredOutputLanguage();
@@ -536,18 +536,41 @@ async function runLocalAnalysis(input, signal, { allowDownload = false } = {}) {
   });
 
   if (availability !== "available" && !allowDownload) {
-    throw new Error("Chrome 本地 AI 需要先就绪，请点击“本地 AI”按钮后再试");
+    throw new Error("Chrome local AI must be ready first; please click the Local AI button and try again");
   }
 
-  gdeltSummaryEl.textContent = "正在搜索 GDELT 相关新闻…";
-  const gdeltBundle = await fetchGdeltBundle(input, signal, outputLanguage);
+  gdeltSummaryEl.textContent = "Searching GDELT news...";
+  let gdeltBundle;
+  try {
+    gdeltBundle = await fetchGdeltBundle(input, signal, outputLanguage);
+  } catch (err) {
+    reportError("fetchGdeltBundle", err, {
+      input: { url: input.url, title: input.title },
+      outputLanguage
+    });
+    const anchorDate = extractAnchorDate(input);
+    const errorMessage = `GDELT fetch failed: ${String(err?.message || err)}`;
+    gdeltBundle = {
+      query: "",
+      items: [],
+      anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : "",
+      errorMessage,
+      rawPreview: "",
+      summary: summarizeGdeltBundle("", [], errorMessage, anchorDate, outputLanguage)
+    };
+  }
   gdeltSummaryEl.textContent = gdeltBundle.summary || "—";
   const mbfcEntry = await lookupMbfcEntry(input.url || "");
-  const session = await api.create({
-    expectedInputs: [{ type: "text", languages: ["en"] }],
-    expectedOutputs: [{ type: "text", languages: [modelOutputLanguage] }],
-    signal
-  });
+  let session;
+  try {
+    session = await api.create({
+      expectedInputs: [{ type: "text", languages: ["en"] }],
+      expectedOutputs: [{ type: "text", languages: [modelOutputLanguage] }],
+      signal
+    });
+  } catch (err) {
+    throw new Error(`Local AI session creation failed: ${String(err?.message || err)}`);
+  }
 
   const prompt = buildLocalPrompt(input, gdeltBundle, mbfcEntry, modelOutputLanguage, outputLanguage);
   let raw = "";
@@ -736,7 +759,7 @@ function errorResult({ input, mode, message }) {
     confidence: 0,
     evidence: [
       {
-        title: input.title || "当前页面",
+        title: input.title || "Current page",
         url: input.url || "",
         quote: input.selectionText || input.pageText?.slice(0, 160) || "",
         retrieved_at: input.capturedAt || new Date().toISOString(),
@@ -1244,7 +1267,7 @@ async function shouldTranslateText(value, sourceLanguage, targetLanguage, signal
 function buildFallbackEvidence(input) {
   return [
     {
-      title: input.title || "当前页面",
+      title: input.title || "Current page",
       url: input.url || "",
       quote: input.selectionText || input.pageText?.slice(0, 180) || "",
       retrieved_at: input.capturedAt || new Date().toISOString(),
@@ -1309,8 +1332,8 @@ async function fetchGdeltBundle(input, signal, outputLanguage = "en") {
       query,
       items: [],
       anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : "",
-      errorMessage: `GDELT 暂时限流，已进入冷却期，${Math.ceil((cooldownUntil - Date.now()) / 1000)} 秒后再试`,
-      summary: summarizeGdeltBundle(query, [], `GDELT 暂时限流，已进入冷却期，${Math.ceil((cooldownUntil - Date.now()) / 1000)} 秒后再试`, anchorDate, outputLanguage)
+      errorMessage: `GDELT temporarily rate limited. Please try again in ${Math.ceil((cooldownUntil - Date.now()) / 1000)} seconds.`,
+      summary: summarizeGdeltBundle(query, [], `GDELT temporarily rate limited. Please try again in ${Math.ceil((cooldownUntil - Date.now()) / 1000)} seconds.`, anchorDate, outputLanguage)
     };
   }
 
@@ -1412,7 +1435,7 @@ async function fetchGdeltItems(query, signal) {
       await chrome.storage.local.set({ gdeltCooldownUntil: cooldown });
       return {
         items: [],
-        errorMessage: `GDELT 访问过于频繁，请稍后再试（${resp.status}${text ? ` - ${text}` : ""}）`,
+        errorMessage: `GDELT access is too frequent; please try again later (${resp.status}${text ? ` - ${text}` : ""})`,
         rawPreview: payloadPreview
       };
     }
@@ -1458,7 +1481,7 @@ function normalizeGdeltItem(item) {
   const quote = String(item?.content_text || item?.summary || item?.description || "").trim();
   const url = String(item?.url || item?.external_url || item?.id || "").trim();
   return {
-    title: String(item?.title || item?.id || "GDELT 命中").trim(),
+    title: String(item?.title || item?.id || "GDELT hit").trim(),
     url,
     quote: quote ? quote.slice(0, 240) : "",
     retrieved_at: publishedAt || new Date().toISOString(),
@@ -1714,7 +1737,10 @@ function extractGdeltKeywords(text) {
 function isValidGdeltQueryToken(value) {
   const token = String(value || "").trim();
   if (!token) return false;
-  if (/^\d+(?:\.\d+)?%?$/.test(token)) return true;
+  if (/^\d+(?:\.\d+)?%?$/.test(token)) {
+    // Reject very short numeric tokens; GDELT will reject them as keyword too short.
+    return token.length >= 4;
+  }
   if (/^[A-Z0-9.:-]+$/.test(token) && token.length >= minGdeltTermLength) return true;
   return token.length >= minGdeltTermLength;
 }
@@ -1824,7 +1850,7 @@ function pct(v) {
 
 function formatError(err) {
   const message = String(err?.message || err || "Unknown error");
-  return `本地 AI 不可用：${message}`;
+  return `Local AI unavailable: ${message}`;
 }
 
 function sanitizeModelText(value) {
