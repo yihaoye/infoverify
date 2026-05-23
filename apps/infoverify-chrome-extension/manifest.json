@@ -4,7 +4,12 @@
   "version": "0.1.0",
   "description": "Verify selected text or current page with local AI and GDELT cross-validation in a side panel.",
   "minimum_chrome_version": "138",
-  "permissions": ["contextMenus", "storage", "sidePanel", "activeTab"],
+  "permissions": [
+    "contextMenus",
+    "storage",
+    "sidePanel",
+    "activeTab"
+  ],
   "host_permissions": [
     "https://api.gdeltproject.org/*"
   ],
@@ -14,13 +19,23 @@
   },
   "content_scripts": [
     {
-      "matches": ["<all_urls>"],
-      "js": ["src/content.js"],
+      "matches": [
+        "<all_urls>"
+      ],
+      "js": [
+        "src/content.js"
+      ],
       "run_at": "document_idle"
     }
   ],
   "side_panel": {
     "default_path": "src/panel/panel.html"
   },
-  "options_page": "src/options/options.html"
+  "options_page": "src/options/options.html",
+  "icons": {
+    "16": "assets/icon16.png",
+    "32": "assets/icon32.png",
+    "48": "assets/icon48.png",
+    "128": "assets/icon128.png"
+  }
 }

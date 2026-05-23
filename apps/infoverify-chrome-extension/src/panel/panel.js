@@ -371,7 +371,9 @@ async function localizeAssessmentResult(result, targetLanguage, signal) {
 // ---------- Panel state, loading state, and result rendering ----------
 function updateModeButtons() {
   localModeButtonEl.classList.toggle("active", true);
-  cloudModeButtonEl.classList.toggle("active", false);
+  if (cloudModeButtonEl) {
+    cloudModeButtonEl.classList.toggle("active", false);
+  }
   modePillEl.textContent = "Local AI";
 }
 

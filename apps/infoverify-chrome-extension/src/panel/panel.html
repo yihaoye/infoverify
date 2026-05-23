@@ -13,12 +13,11 @@
           <div class="title">InfoVerify</div>
           <span class="headerPill" id="modePill">Local AI</span>
         </div>
-        <div class="subtitle">Uses local AI by default with automatic GDELT cross-validation. Cloud AI is planned.</div>
+        <div class="subtitle">Uses local AI by default with automatic GDELT cross-validation.</div>
       </div>
 
-      <div class="modeSwitcher" role="group" aria-label="AI mode switch">
-        <button class="modeButton active" id="localModeButton" type="button">Local AI</button>
-        <button class="modeButton" id="cloudModeButton" type="button" disabled>Cloud AI (Planned)</button>
+      <div class="modeSwitcher" role="group" aria-label="Analysis action">
+        <button class="modeButton active" id="localModeButton" type="button">Analyze</button>
       </div>
     </header>
 
@@ -35,6 +34,10 @@
           <span></span>
         </div>
       </section>
+
+      <div class="statusRow" aria-live="polite">
+        <span class="status" id="status">Ready</span>
+      </div>
 
       <section class="card">
         <div class="cardTitle">Conclusion</div>
