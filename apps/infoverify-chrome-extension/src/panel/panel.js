@@ -40,7 +40,6 @@ const minLoadingMs = 700;
 const gdeltMinIntervalMs = 5200;
 const gdeltCacheTtlMs = 15 * 60 * 1000;
 const gdeltCooldownMs = 2 * 60 * 1000;
-const minGdeltTermLength = 3;
 const SUPPORTED_OUTPUT_LANGUAGES = new Set(["en", "es", "ja", "zh"]);
 const SUPPORTED_MODEL_OUTPUT_LANGUAGES = new Set(["en", "es", "ja"]);
 const OUTPUT_LANGUAGE_LABELS = {
@@ -72,6 +71,9 @@ const FALLBACK_TEXT = {
   }
 };
 
+
+
+// ---------- UI events, logging, and shared panel state ----------
 localModeButtonEl.addEventListener("click", () => {
   void requestRun();
 });
@@ -193,6 +195,44 @@ function setDebugTrace(trace) {
   debugStatusEl.textContent = "Copy this and paste it here for troubleshooting";
 }
 
+
+
+// ---------- Language detection and translation ----------
+let languageDetectorCache = null;
+
+async function detectLanguage(text, signal) {
+  const sample = String(text || "").trim();
+  if (!sample || sample.length < 20) {
+    return { language: "unknown", confidence: 0, results: [] };
+  }
+
+  const api = globalThis.LanguageDetector;
+  if (!api) return { language: "unknown", confidence: 0, results: [] };
+
+  try {
+    const availability = await api.availability();
+    if (availability === "unavailable") return { language: "unknown", confidence: 0, results: [] };
+
+    if (!languageDetectorCache) {
+      languageDetectorCache = await api.create();
+    }
+
+    const results = await languageDetectorCache.detect(sample);
+    if (!Array.isArray(results) || results.length === 0) {
+      return { language: "unknown", confidence: 0, results: [] };
+    }
+
+    const [top] = results;
+    return {
+      language: String(top?.detectedLanguage || "unknown"),
+      confidence: Number(top?.confidence || 0),
+      results
+    };
+  } catch {
+    return { language: "unknown", confidence: 0, results: [] };
+  }
+}
+
 let translatorCache = new Map();
 
 async function getTranslator(sourceLanguage, targetLanguage, signal) {
@@ -230,6 +270,49 @@ async function translateText(value, sourceLanguage, targetLanguage, signal) {
   } catch {
     return text;
   }
+}
+
+async function prepareEnglishAnalysisInput(input, signal) {
+  const selectionText = String(input?.selectionText || "");
+  const title = String(input?.title || "");
+  const pageText = String(input?.pageText || "");
+  const sampleText = [selectionText, title, pageText].filter(Boolean).join(" ").slice(0, 2400);
+
+  const detected = await detectLanguage(sampleText, signal);
+  const detectedLanguage = String(detected.language || "unknown").toLowerCase();
+  // TODO: Tune this threshold after we have a few real-world examples.
+  const needsTranslation = detectedLanguage !== "unknown" && detectedLanguage !== "en" && detected.confidence >= 0.45;
+
+  if (!needsTranslation) {
+    return {
+      ...input,
+      analysisLanguage: detectedLanguage,
+      analysisLanguageConfidence: detected.confidence,
+      analysisText: String(input?.analysisText || input?.pageText || input?.selectionText || ""),
+      sourceSelectionText: selectionText,
+      sourceTitle: title,
+      sourcePageText: pageText
+    };
+  }
+
+  const translatedSelectionText = await translateText(selectionText, detectedLanguage, "en", signal);
+  const translatedTitle = await translateText(title, detectedLanguage, "en", signal);
+  const translatedPageText = await translateText(pageText, detectedLanguage, "en", signal);
+  const translatedAnalysisText = String(translatedPageText || translatedSelectionText || translatedTitle || input?.analysisText || input?.pageText || input?.selectionText || "");
+
+  return {
+    ...input,
+    selectionText: translatedSelectionText || selectionText,
+    title: translatedTitle || title,
+    pageText: translatedPageText || pageText,
+    analysisText: translatedAnalysisText,
+    analysisLanguage: detectedLanguage,
+    analysisLanguageConfidence: detected.confidence,
+    sourceSelectionText: selectionText,
+    sourceTitle: title,
+    sourcePageText: pageText,
+    inputWasTranslated: true
+  };
 }
 
 async function translateArray(values, sourceLanguage, targetLanguage, signal) {
@@ -283,6 +366,9 @@ async function localizeAssessmentResult(result, targetLanguage, signal) {
   return localized;
 }
 
+
+
+// ---------- Panel state, loading state, and result rendering ----------
 function updateModeButtons() {
   localModeButtonEl.classList.toggle("active", true);
   cloudModeButtonEl.classList.toggle("active", false);
@@ -521,6 +607,9 @@ function renderEvidence(evidence) {
   }
 }
 
+
+
+// ---------- Local AI orchestration and scoring pipeline ----------
 async function runLocalAnalysis(input, signal, { allowDownload = false } = {}) {
   const api = globalThis.LanguageModel;
   if (!api) {
@@ -529,6 +618,7 @@ async function runLocalAnalysis(input, signal, { allowDownload = false } = {}) {
 
   const outputLanguage = await getPreferredOutputLanguage();
   const modelOutputLanguage = resolveModelOutputLanguage(outputLanguage);
+  const preparedInput = await prepareEnglishAnalysisInput(input, signal);
 
   const availability = await api.availability({
     expectedInputs: [{ type: "text", languages: ["en"] }],
@@ -542,13 +632,13 @@ async function runLocalAnalysis(input, signal, { allowDownload = false } = {}) {
   gdeltSummaryEl.textContent = "Searching GDELT news...";
   let gdeltBundle;
   try {
-    gdeltBundle = await fetchGdeltBundle(input, signal, outputLanguage);
+    gdeltBundle = await fetchGdeltBundle(preparedInput, signal, outputLanguage);
   } catch (err) {
     reportError("fetchGdeltBundle", err, {
-      input: { url: input.url, title: input.title },
+      input: { url: preparedInput.url, title: preparedInput.title },
       outputLanguage
     });
-    const anchorDate = extractAnchorDate(input);
+    const anchorDate = extractAnchorDate(preparedInput);
     const errorMessage = `GDELT fetch failed: ${String(err?.message || err)}`;
     gdeltBundle = {
       query: "",
@@ -560,7 +650,7 @@ async function runLocalAnalysis(input, signal, { allowDownload = false } = {}) {
     };
   }
   gdeltSummaryEl.textContent = gdeltBundle.summary || "—";
-  const mbfcEntry = await lookupMbfcEntry(input.url || "");
+  const mbfcEntry = await lookupMbfcEntry(preparedInput.url || "");
   let session;
   try {
     session = await api.create({
@@ -572,7 +662,7 @@ async function runLocalAnalysis(input, signal, { allowDownload = false } = {}) {
     throw new Error(`Local AI session creation failed: ${String(err?.message || err)}`);
   }
 
-  const prompt = buildLocalPrompt(input, gdeltBundle, mbfcEntry, modelOutputLanguage, outputLanguage);
+  const prompt = buildLocalPrompt(preparedInput, gdeltBundle, mbfcEntry, modelOutputLanguage, outputLanguage);
   let raw = "";
   try {
     raw = await promptLocalAssessment(session, prompt, signal);
@@ -583,7 +673,7 @@ async function runLocalAnalysis(input, signal, { allowDownload = false } = {}) {
     });
     raw = "";
   }
-  console.error(`${DEBUG_PREFIX} local AI raw output`, {
+  console.info(`${DEBUG_PREFIX} local AI raw output`, {
     outputLanguage,
     modelOutputLanguage,
     promptPreview: truncateForDebug(prompt, 2500),
@@ -591,7 +681,7 @@ async function runLocalAnalysis(input, signal, { allowDownload = false } = {}) {
   });
   const parsed = parseAssessmentJson(raw);
   if (!parsed) {
-    const fallback = buildDeterministicLocalAssessment(input, gdeltBundle, mbfcEntry, raw, outputLanguage);
+    const fallback = buildDeterministicLocalAssessment(preparedInput, gdeltBundle, mbfcEntry, raw, outputLanguage);
     fallback.debug_trace = buildDebugTrace({
       stage: "local-parse-fallback",
       outputLanguage,
@@ -602,7 +692,10 @@ async function runLocalAnalysis(input, signal, { allowDownload = false } = {}) {
       error: "raw output did not parse as JSON",
       gdeltSummary: gdeltBundle.summary,
       gdeltRawPreview: gdeltBundle.rawPreview,
-      mbfc: mbfcEntry
+      mbfc: mbfcEntry,
+      analysisLanguage: preparedInput.analysisLanguage,
+      analysisLanguageConfidence: preparedInput.analysisLanguageConfidence,
+      inputWasTranslated: Boolean(preparedInput.inputWasTranslated)
     });
     console.error(`${DEBUG_PREFIX} local AI parse fallback`, {
       stack: "",
@@ -622,19 +715,19 @@ async function runLocalAnalysis(input, signal, { allowDownload = false } = {}) {
     rationale: sanitizeModelText(parsed.rationale || parsed.summary || fallbackLanguageText(outputLanguage, "analysisDone")),
     rule_scores: ruleScores,
     rule_notes: normalizeRuleNotes(parsed.rule_notes),
-    evidence: mergeEvidenceLists(normalizeEvidence(parsed.evidence, input), gdeltBundle.items, input),
+    evidence: mergeEvidenceLists(normalizeEvidence(parsed.evidence, preparedInput), gdeltBundle.items, preparedInput),
     conflicts: normalizeList(parsed.conflicts),
     missing: normalizeList(parsed.missing),
     gdelt_summary: gdeltBundle.summary,
     reproducibility_summary: buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage),
     cross_validation_summary: buildCrossValidationSummary(gdeltBundle, outputLanguage),
-    specificity_summary: buildSpecificitySummary(input, outputLanguage)
+    specificity_summary: buildSpecificitySummary(preparedInput, outputLanguage)
   };
 
   const localizedResult = outputLanguage === "zh"
     ? await localizeAssessmentResult(result, outputLanguage, signal)
     : result;
-  console.error(`${DEBUG_PREFIX} local AI success`, {
+  console.info(`${DEBUG_PREFIX} local AI success`, {
     outputLanguage,
     modelOutputLanguage,
     verdict: localizedResult.verdict,
@@ -644,6 +737,7 @@ async function runLocalAnalysis(input, signal, { allowDownload = false } = {}) {
   return localizedResult;
 }
 
+// ---------- Deterministic fallback assessment when model output cannot be parsed ----------
 function buildDeterministicLocalAssessment(input, gdeltBundle, mbfcEntry, raw, outputLanguage) {
   const rule_scores = buildDeterministicRuleScores(input, gdeltBundle, mbfcEntry);
   const confidence = normalizeConfidence(averageRuleScores(rule_scores));
@@ -669,6 +763,7 @@ function buildDeterministicLocalAssessment(input, gdeltBundle, mbfcEntry, raw, o
   };
 }
 
+// ---------- Rule scoring helpers used by both model and fallback paths ----------
 function buildDeterministicRuleScores(input, gdeltBundle, mbfcEntry) {
   return {
     reproducibility: scoreReproducibility(gdeltBundle, mbfcEntry),
@@ -683,9 +778,8 @@ function scoreSpecificity(input) {
   const words = normalized.split(/\s+/).filter(Boolean).length;
   const numbers = (normalized.match(/\b\d+(?:\.\d+)?%?\b/g) || []).length;
   const dates = (normalized.match(/(?:\d{4}[/-]\d{1,2}[/-]\d{1,2})|(?:\d{4}年\d{1,2}月\d{1,2}日)|(?:\d{1,2}\/\d{1,2}\/\d{4})/g) || []).length;
-  const entities = extractGdeltKeywords(normalized).length;
-  const hasConcreteQuestion = /(?:谁|what|who|when|where|why|how|什么|何时|何地|为什么|如何)/i.test(normalized);
-  const score = 0.18 + Math.min(0.35, words / 180) + Math.min(0.18, numbers * 0.05) + Math.min(0.12, dates * 0.06) + Math.min(0.1, entities * 0.015) + (hasConcreteQuestion ? 0.07 : 0);
+  const hasSpecificMarkers = /(?:%|\$|\b[A-Z]{2,5}(?:\.[A-Z]{1,2})?\b)/.test(normalized);
+  const score = 0.16 + Math.min(0.34, words / 220) + Math.min(0.2, numbers * 0.05) + Math.min(0.14, dates * 0.06) + (hasSpecificMarkers ? 0.08 : 0);
   return clamp(score, 0, 1);
 }
 
@@ -719,6 +813,7 @@ function scoreReproducibility(gdeltBundle, mbfcEntry) {
   return clamp(score, 0, 1);
 }
 
+// ---------- Normalization of model output and error handling ----------
 function normalizeResult(payload, mode, input) {
   const result = {
     verdict: normalizeVerdict(payload?.verdict),
@@ -786,6 +881,7 @@ function errorResult({ input, mode, message }) {
   };
 }
 
+// ---------- Prompt construction and output schema for the local model ----------
 function buildLocalPrompt(input, gdeltBundle, mbfcEntry, modelOutputLanguage = "en", displayLanguage = "en") {
   const analysisText = getAnalysisText(input);
   const specificitySummary = buildSpecificitySummary(input, "en");
@@ -806,7 +902,7 @@ function buildLocalPrompt(input, gdeltBundle, mbfcEntry, modelOutputLanguage = "
   const gdeltQueryLine = gdeltBundle?.query ? `GDELT query: ${gdeltBundle.query}` : "GDELT query: (empty)";
   const gdeltAnchorLine = gdeltBundle?.anchorDate ? `GDELT anchor date: ${gdeltBundle.anchorDate}` : "GDELT anchor date: (none)";
   return [
-    "You are a financial information verification assistant. Judge only from the text below, the GDELT evidence, and your training knowledge. Do not browse the web or invent outside facts.",
+    "You are an information verification assistant. Judge only from the text below, the GDELT evidence, and your training knowledge. Do not browse the web or invent outside facts.",
     `Write the final answer in ${outputLanguageLabel}.`,
     displayLanguage === "zh" ? `The user interface will translate the final answer into ${displayLanguageLabel}.` : "",
     "Evaluate the statement using three principles:",
@@ -846,87 +942,10 @@ function buildLocalPrompt(input, gdeltBundle, mbfcEntry, modelOutputLanguage = "
   ].join("\n");
 }
 
-const LOCAL_ANALYSIS_SCHEMA = {
-  type: "object",
-  additionalProperties: false,
-  required: [
-    "verdict",
-    "confidence",
-    "overall_score",
-    "summary",
-    "rationale",
-    "rule_scores",
-    "rule_notes",
-    "evidence",
-    "conflicts",
-    "missing"
-  ],
-  properties: {
-    verdict: {
-      type: "string",
-      enum: ["supported", "contradicted", "unclear"]
-    },
-    confidence: {
-      type: "number",
-      minimum: 0,
-      maximum: 1
-    },
-    overall_score: {
-      type: "number",
-      minimum: 0,
-      maximum: 1
-    },
-    summary: {
-      type: "string"
-    },
-    rationale: {
-      type: "string"
-    },
-    rule_scores: {
-      type: "object",
-      additionalProperties: false,
-      required: ["reproducibility", "cross_validation", "detail_richness"],
-      properties: {
-        reproducibility: { type: "number", minimum: 0, maximum: 1 },
-        cross_validation: { type: "number", minimum: 0, maximum: 1 },
-        detail_richness: { type: "number", minimum: 0, maximum: 1 }
-      }
-    },
-    rule_notes: {
-      type: "object",
-      additionalProperties: false,
-      required: ["reproducibility", "cross_validation", "detail_richness"],
-      properties: {
-        reproducibility: { type: "string" },
-        cross_validation: { type: "string" },
-        detail_richness: { type: "string" }
-      }
-    },
-    evidence: {
-      type: "array",
-      items: {
-        type: "object",
-        additionalProperties: true,
-        required: ["title", "url", "quote"],
-        properties: {
-          title: { type: "string" },
-          url: { type: "string" },
-          quote: { type: "string" }
-        }
-      }
-    },
-    conflicts: {
-      type: "array",
-      items: { type: "string" }
-    },
-    missing: {
-      type: "array",
-      items: { type: "string" }
-    }
-  }
-};
-
+// ---------- Input analysis, MBFC lookup, and model repair helpers ----------
 function getAnalysisText(input) {
+  const analysisText = String(input?.analysisText || "").trim();
+  if (analysisText) return analysisText;
   const selection = String(input?.selectionText || "").trim();
   if (selection) return selection;
   return String(input?.pageText || "").trim();
@@ -958,26 +977,6 @@ async function lookupMbfcEntry(url) {
   return null;
 }
 
-async function repairAssessmentJson(session, raw, signal) {
-  const text = sanitizeModelText(raw);
-  if (!text) return "";
-
-  const repairPrompt = [
-    "请把下面的内容修复成严格合法的 JSON 对象，只输出 JSON 本身，不要解释，不要 markdown，不要代码块。",
-    "如果原文里已经有 JSON，请修正它并补全缺失字段。",
-    "如果原文不是 JSON，请根据原文生成 best-effort 的 JSON，并保留原文的结论与证据。",
-    "必须包含这些键：verdict、confidence、overall_score、summary、rationale、rule_scores、rule_notes、evidence、conflicts、missing。",
-    "内容如下：",
-    text
-  ].join("\n");
-
-  try {
-    return await session.prompt(repairPrompt, { signal });
-  } catch {
-    return "";
-  }
-}
-
 async function promptLocalAssessment(session, prompt, signal) {
   return await session.prompt(prompt, { signal });
 }
@@ -1005,6 +1004,7 @@ function normalizeMbfcEntry(entry, hostname) {
   };
 }
 
+// ---------- Summary builders for reproducibility, cross-validation, and specificity ----------
 function buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage = "en") {
   const language = resolveOutputLanguage(outputLanguage);
   const copy = {
@@ -1046,7 +1046,7 @@ function buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage = "e
       recent: "最近",
       distinct: "个独立域名",
       noData: "未找到可用新闻事件。",
-      cue: "评估提示：如果信源在时间上稳定、反复出现且域名信誉较好，可重复性更高。"
+      cue: "评估提示：如果信源在时间上稳定、反复出现且域名信誉较好，可复现性更高。"
     }
   }[language] || {
     mbfc: "MBFC",
@@ -1154,52 +1154,45 @@ function buildSpecificitySummary(input, outputLanguage = "en") {
     en: {
       dikw: "DIKW",
       fiveW1H: "5W1H",
+      dikwText: "DIKW cue: judge whether the claim stays at the data / information / knowledge / wisdom level expected for a verifiable statement, and reward explicit facts, clear structure, and falsifiable detail.",
+      fiveW1HText: "5W1H cue: let the model judge whether the claim provides enough who / what / when / where / why / how context, rather than relying on rigid keyword checks.",
       relation: "Data-to-conclusion relevance: if numbers are merely nearby, do not support the conclusion, or key variables are missing, specificity should be scored lower.",
-      bayes: "Bayesian heuristic: more precise details, more concrete numbers, and more complete conditions mean lower entropy and easier verification.",
-      currentText: "Current text length"
+      bayes: "Bayesian heuristic: more precise details, more concrete numbers, and more complete conditions mean lower entropy and easier verification."
     },
     es: {
       dikw: "DIKW",
       fiveW1H: "5W1H",
+      dikwText: "Pista DIKW: evalúa si la afirmación se mantiene al nivel de datos / información / conocimiento / sabiduría esperado para una declaración verificable, y premia hechos explícitos, estructura clara y detalle falsable.",
+      fiveW1HText: "Pista 5W1H: deja que el modelo juzgue si la afirmación aporta suficiente contexto de quién / qué / cuándo / dónde / por qué / cómo, en lugar de depender de comprobaciones rígidas de palabras clave.",
       relation: "Relevancia entre datos y conclusión: si los números solo están cerca, no respaldan la conclusión o faltan variables clave, la especificidad debe puntuarse más bajo.",
-      bayes: "Heurística bayesiana: detalles más precisos, números más concretos y condiciones más completas significan menor entropía y verificación más fácil.",
-      currentText: "Longitud actual del texto"
+      bayes: "Heurística bayesiana: detalles más precisos, números más concretos y condiciones más completas significan menor entropía y verificación más fácil."
     },
     ja: {
       dikw: "DIKW",
       fiveW1H: "5W1H",
+      dikwText: "DIKW の目安: 検証可能な主張として求められるデータ / 情報 / 知識 / 知恵の段階に沿っているかを判断し、明示的な事実、明確な構造、反証可能な詳細を高く評価します。",
+      fiveW1HText: "5W1H の目安: 厳密なキーワード判定ではなく、誰 / 何 / いつ / どこ / なぜ / どうやって の文脈が十分かをモデルに判断させます。",
       relation: "データと結論の関連性: 数値が周辺にあるだけで結論を裏付けない、または重要な変数が欠けている場合、具体性のスコアは低くすべきです。",
-      bayes: "ベイズ的ヒューリスティック: より正確な詳細、より具体的な数値、より完全な条件ほどエントロピーは低くなり、検証しやすくなります。",
-      currentText: "現在のテキスト長"
+      bayes: "ベイズ的ヒューリスティック: より正確な詳細、より具体的な数値、より完全な条件ほどエントロピーは低くなり、検証しやすくなります。"
     },
     zh: {
       dikw: "DIKW",
       fiveW1H: "5W1H",
+      dikwText: "DIKW 提示：判断这条主张是否停留在适合可验证陈述的数据 / 信息 / 知识 / 智慧层级，并奖励明确事实、清晰结构和可证伪细节。",
+      fiveW1HText: "5W1H 提示：让模型判断这个主张是否提供了足够的谁 / 什么 / 何时 / 何地 / 为什么 / 如何 上下文，而不是依赖僵硬的关键词命中。",
       relation: "数据与结论相关性：如果数字只是顺带出现、没有支撑结论，或者缺少关键变量，具体性应降低评分。",
-      bayes: "贝叶斯启发：细节越精确、数字越具体、条件越完整，熵越低，越容易验证。",
-      currentText: "当前文本长度"
+      bayes: "贝叶斯启发：细节越精确、数字越具体、条件越完整，熵越低，越容易验证。"
     }
   }[language] || {
     dikw: "DIKW",
     fiveW1H: "5W1H",
+    dikwText: "DIKW cue: judge whether the claim stays at the data / information / knowledge / wisdom level expected for a verifiable statement, and reward explicit facts, clear structure, and falsifiable detail.",
+    fiveW1HText: "5W1H cue: let the model judge whether the claim provides enough who / what / when / where / why / how context, rather than relying on rigid keyword checks.",
     relation: "Data-to-conclusion relevance: if numbers are merely nearby, do not support the conclusion, or key variables are missing, specificity should be scored lower.",
-    bayes: "Bayesian heuristic: more precise details, more concrete numbers, and more complete conditions mean lower entropy and easier verification.",
-    currentText: "Current text length"
+    bayes: "Bayesian heuristic: more precise details, more concrete numbers, and more complete conditions mean lower entropy and easier verification."
   };
-  const text = getAnalysisText(input) || `${input?.selectionText || ""} ${input?.pageText || ""}`;
-  const normalized = String(text || "");
-  const words = normalized.split(/\s+/).filter(Boolean);
-  const numbers = normalized.match(/\b\d+(?:\.\d+)?%?\b/g) || [];
-  const dates = normalized.match(/(?:\d{4}[/-]\d{1,2}[/-]\d{1,2})|(?:\d{4}年\d{1,2}月\d{1,2}日)|(?:\d{1,2}\/\d{1,2}\/\d{4})/g) || [];
-  const who = /(?:谁|who|which company|which person)/i.test(normalized);
-  const what = /(?:什么|what|earnings|revenue|profit|guidance|lawsuit|merger|policy)/i.test(normalized);
-  const when = /(?:何时|when|time|date|today|yesterday|tomorrow)/i.test(normalized);
-  const where = /(?:何地|where|china|us|u\.s\.|america|new york|beijing)/i.test(normalized);
-  const why = /(?:为什么|why|because|reason)/i.test(normalized);
-  const how = /(?:如何|how|method|way|via)/i.test(normalized);
-
-  const dikw = `${copy.dikw}: focus on verifiable detail, explicit data, and explicit causality. ${copy.currentText}: ${words.length} words, ${numbers.length} numbers, ${dates.length} dates.`;
-  const fiveW1H = `${copy.fiveW1H}: who=${yesNo(who)}, what=${yesNo(what)}, when=${yesNo(when)}, where=${yesNo(where)}, why=${yesNo(why)}, how=${yesNo(how)}.`;
+  const dikw = copy.dikwText;
+  const fiveW1H = copy.fiveW1HText;
   const relation = copy.relation;
   const bayes = copy.bayes;
   return [dikw, fiveW1H, relation, bayes].join("\n");
@@ -1244,10 +1237,7 @@ function formatDateOnly(value) {
   return parsed.toISOString().slice(0, 10);
 }
 
-function yesNo(value) {
-  return value ? "有" : "无";
-}
-
+// ---------- Translation display helpers and localized text checks ----------
 function isLikelyLocalized(text, targetLanguage) {
   const value = String(text || "");
   if (!value) return false;
@@ -1264,6 +1254,7 @@ async function shouldTranslateText(value, sourceLanguage, targetLanguage, signal
   return await translateText(text, sourceLanguage, targetLanguage, signal);
 }
 
+// ---------- Evidence merging and fallback evidence ----------
 function buildFallbackEvidence(input) {
   return [
     {
@@ -1300,11 +1291,12 @@ function mergeEvidenceLists(primary, secondary, input) {
   return merged.length > 0 ? merged : buildFallbackEvidence(input);
 }
 
+// ---------- GDELT query generation, caching, throttling, and parsing ----------
 async function fetchGdeltBundle(input, signal, outputLanguage = "en") {
-  const queries = buildGdeltQueries(input);
+  const queries = await buildGdeltQueries(input, signal);
   const anchorDate = extractAnchorDate(input);
   const query = queries[0] || "";
-  console.debug(`${DEBUG_PREFIX} GDELT query candidates`, {
+  console.info(`${DEBUG_PREFIX} GDELT query candidates`, {
     queries,
     anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : ""
   });
@@ -1447,15 +1439,8 @@ async function fetchGdeltItems(query, signal) {
   }
 
   const text = await safeReadText(resp);
-  let data = null;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    const parseError = new Error(`GDELT returned non-JSON response: ${text ? text.slice(0, 220) : "empty response"}`);
-    console.error(`${DEBUG_PREFIX} GDELT non-JSON response`, parseError, {
-      endpoint: endpoint.toString(),
-      payloadPreview: text.slice(0, 600)
-    });
+  const data = parseJsonFeed(text, endpoint.toString());
+  if (!data) {
     return {
       items: [],
       errorMessage: `GDELT returned non-JSON response${text ? `: ${text.slice(0, 220)}` : ""}`,
@@ -1473,6 +1458,38 @@ async function fetchGdeltItems(query, signal) {
     errorMessage: "",
     rawPreview: text.slice(0, 600)
   };
+}
+
+function parseJsonFeed(text, endpoint) {
+  const rawText = String(text || "");
+  const candidates = [];
+  const normalized = rawText.replace(/^\uFEFF/, "").trim();
+  if (normalized) candidates.push(normalized);
+
+  const first = normalized.indexOf("{");
+  const last = normalized.lastIndexOf("}");
+  if (first >= 0 && last > first) {
+    candidates.push(normalized.slice(first, last + 1));
+  }
+
+  for (const candidate of candidates) {
+    try {
+      return JSON.parse(candidate);
+    } catch (err) {
+      console.error(`${DEBUG_PREFIX} GDELT JSON parse candidate failed`, {
+        endpoint,
+        preview: candidate.slice(0, 180),
+        error: String(err?.message || err)
+      });
+    }
+  }
+
+  const parseError = new Error(`GDELT returned non-JSON response: ${rawText ? rawText.slice(0, 220) : "empty response"}`);
+  console.error(`${DEBUG_PREFIX} GDELT non-JSON response`, parseError, {
+    endpoint,
+    payloadPreview: rawText.slice(0, 600)
+  });
+  return null;
 }
 
 function normalizeGdeltItem(item) {
@@ -1618,133 +1635,89 @@ async function getGdeltCooldownUntil() {
   return value;
 }
 
-function buildGdeltQueries(input) {
-  const candidates = [];
-  const selection = String(input?.selectionText || "").trim();
-  const title = String(input?.title || "").trim();
-  const pageText = String(input?.pageText || "").trim();
-
-  if (selection) {
-    const selectionQuery = normalizeGdeltQuery(selection);
-    if (selectionQuery) {
-      candidates.push(selectionQuery);
-    }
-  }
-
-  const combined = [selection, title, pageText.slice(0, 1200)].filter(Boolean).join(" ");
-  const keywords = extractGdeltKeywords(combined).filter(isValidGdeltQueryToken);
-  if (keywords.length > 0) {
-    candidates.push(keywords.slice(0, 6).join(" "));
-  }
-
-  const titleKeywords = extractGdeltKeywords(title);
-  if (titleKeywords.length > 0) {
-    const titleQuery = titleKeywords.filter(isValidGdeltQueryToken).slice(0, 5).join(" ");
-    if (titleQuery) candidates.push(titleQuery);
-  }
-
-  const fallback = extractGdeltKeywords(pageText);
-  if (fallback.length > 0) {
-    const fallbackQuery = fallback.filter(isValidGdeltQueryToken).slice(0, 4).join(" ");
-    if (fallbackQuery) candidates.push(fallbackQuery);
-  }
-
-  return [...new Set(candidates.map((value) => value.trim()).filter(Boolean))].slice(0, 4);
+async function buildGdeltQueries(input, signal) {
+  const promptQuery = await buildPromptDrivenGdeltQuery(input, signal);
+  return promptQuery ? [promptQuery] : [];
 }
 
-function normalizeGdeltQuery(text) {
-  const keywords = extractGdeltKeywords(text).filter(isValidGdeltQueryToken);
-  if (keywords.length === 0) return "";
-  return keywords.slice(0, 6).join(" ");
-}
-
-function extractGdeltKeywords(text) {
-  const normalized = String(text || "")
-    .replace(/[\u2018\u2019\u201c\u201d]/g, '"')
-    .replace(/[\r\n]+/g, " ")
+async function buildPromptDrivenGdeltQuery(input, signal) {
+  const text = [
+    String(input?.analysisText || "").trim(),
+    String(input?.selectionText || "").trim(),
+    String(input?.title || "").trim(),
+    String(input?.pageText || "").trim()
+  ]
+    .filter(Boolean)
+    .join("\n\n")
     .trim();
 
-  if (!normalized) return [];
+  if (!text) return "";
 
-  const stopWords = new Set([
-    "the",
-    "and",
-    "for",
-    "with",
-    "that",
-    "this",
-    "from",
-    "your",
-    "have",
-    "will",
-    "into",
-    "are",
-    "was",
-    "were",
-    "been",
-    "they",
-    "them",
-    "their",
-    "about",
-    "there",
-    "which",
-    "when",
-    "what",
-    "where",
-    "who",
-    "whom",
-    "why",
-    "how",
-    "stock",
-    "stocks",
-    "news",
-    "article",
-    "page",
-    "result",
-    "analysis"
-  ]);
+  const api = globalThis.LanguageModel;
+  if (!api) return "";
 
-  const phraseMatches = normalized.match(/"([^"]{3,80})"/g) || [];
-  const phrases = phraseMatches
-    .map((item) => item.replace(/^"|"$/g, "").trim())
-    .filter((item) => item && item.split(/\s+/).some((part) => part.length >= minGdeltTermLength));
+  try {
+    const availability = await api.availability({
+      expectedInputs: [{ type: "text", languages: ["en"] }],
+      expectedOutputs: [{ type: "text", languages: ["en"] }]
+    });
+    if (availability === "unavailable") return "";
 
-  const tokens = normalized
-    .split(/[^A-Za-z0-9.$%+/:-]+/)
-    .map((item) => item.trim())
-    .filter(Boolean)
-    .filter((item) => item.length >= minGdeltTermLength)
-    .filter((item) => !stopWords.has(item.toLowerCase()));
+    const session = await api.create({
+      expectedInputs: [{ type: "text", languages: ["en"] }],
+      expectedOutputs: [{ type: "text", languages: ["en"] }],
+      signal
+    });
 
-  const tickerMatches = normalized.match(/\b[A-Z]{2,5}(?:\.[A-Z]{1,2})?\b/g) || [];
-  const numericMatches = normalized.match(/\b\d+(?:\.\d+)?%?\b/g) || [];
+    const queryPrompt = [
+      "You are generating a GDELT news search query.",
+      "Return only one short English query string.",
+      "Do not explain, do not use markdown, do not use quotes, and do not include bullets.",
+      "Keep only the most important named entities, organizations, locations, dates, numbers, and event or action words.",
+      "Avoid filler words and avoid tokens shorter than 3 characters.",
+      "Prefer 4 to 8 words total.",
+      "Text:",
+      text
+    ].join("\n");
 
-  const values = [...phrases, ...tickerMatches, ...numericMatches, ...tokens];
-  const deduped = [];
+    const raw = sanitizeModelText(await session.prompt(queryPrompt, { signal }));
+    return cleanGdeltQuery(raw);
+  } catch (err) {
+    console.info(`${DEBUG_PREFIX} GDELT prompt query unavailable`, {
+      message: String(err?.message || err),
+      stack: err?.stack || ""
+    });
+    return "";
+  }
+}
+
+function cleanGdeltQuery(value) {
+  const normalized = String(value || "")
+    .normalize("NFKC")
+    .replace(/["'`]/g, " ")
+    .replace(/[^\p{L}\p{N}%&\-. ]+/gu, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!normalized) return "";
+
   const seen = new Set();
-  for (const value of values) {
-    const trimmed = String(value).trim();
-    if (!trimmed) continue;
-    const key = trimmed.toLowerCase();
+  const tokens = [];
+  for (const rawToken of normalized.split(" ")) {
+    const token = rawToken.replace(/^[^A-Za-z0-9]+|[^A-Za-z0-9%]+$/g, "").trim();
+    if (!token) continue;
+    const shortToken = token.length < 3;
+    const numericToken = /^\d+(?:[.,]\d+)?%?$/.test(token);
+    const upperTicker = /^[A-Z]{3,5}$/.test(token);
+    if (shortToken && !numericToken && !upperTicker) continue;
+    const key = token.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
-    deduped.push(trimmed);
+    tokens.push(token);
+    if (tokens.length >= 8) break;
   }
-
-  return deduped;
+  return tokens.join(" ").trim();
 }
-
-function isValidGdeltQueryToken(value) {
-  const token = String(value || "").trim();
-  if (!token) return false;
-  if (/^\d+(?:\.\d+)?%?$/.test(token)) {
-    // Reject very short numeric tokens; GDELT will reject them as keyword too short.
-    return token.length >= 4;
-  }
-  if (/^[A-Z0-9.:-]+$/.test(token) && token.length >= minGdeltTermLength) return true;
-  return token.length >= minGdeltTermLength;
-}
-
+// ---------- Generic normalization helpers for scores, verdicts, and parsed payloads ----------
 function normalizeRuleScores(ruleScores) {
   const scores = ruleScores && typeof ruleScores === "object" ? ruleScores : {};
   return {
@@ -1843,11 +1816,6 @@ function clamp(v, lo, hi) {
   return v;
 }
 
-function pct(v) {
-  if (typeof v !== "number") return "—";
-  return `${Math.round(v * 100)}%`;
-}
-
 function formatError(err) {
   const message = String(err?.message || err || "Unknown error");
   return `Local AI unavailable: ${message}`;
@@ -1861,7 +1829,7 @@ function sanitizeModelText(value) {
 
 async function safeReadText(resp) {
   try {
-    return (await resp.text())?.slice(0, 500);
+    return await resp.text();
   } catch {
     return "";
   }

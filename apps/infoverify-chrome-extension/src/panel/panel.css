@@ -336,6 +336,14 @@ body {
   font-size: 12px;
 }
 
+.modelNote {
+  margin-top: 6px;
+  padding-left: 10px;
+  border-left: 2px solid rgba(45, 212, 191, 0.35);
+  color: var(--text);
+  font-weight: 600;
+}
+
 .sectionSubtitle {
   color: var(--muted);
   font-size: 12px;
