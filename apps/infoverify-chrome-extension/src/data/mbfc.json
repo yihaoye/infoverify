@@ -1,6 +1,6 @@
 {
-  "version": "2026-05-16",
-  "source": "MBFC static dataset subset from public MBFC ratings page / public gist mirror",
+  "version": "2026-05-31",
+  "source": "MBFC static dataset subset (curated from public MBFC ratings). Excludes Chinese, Russian, and Iraqi state/official media.",
   "domains": {
     "reuters.com": {
       "label": "Reuters",
@@ -301,6 +301,636 @@
       "ideology": "C",
       "rating": "Veryhigh",
       "url": "https://www.bbc.com/news"
+    },
+    "usatoday.com": {
+      "label": "USA Today",
+      "country": "USA",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://usatoday.com/"
+    },
+    "politico.com": {
+      "label": "Politico",
+      "country": "USA",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://politico.com/"
+    },
+    "thehill.com": {
+      "label": "The Hill",
+      "country": "USA",
+      "bias": "center",
+      "factual": "High",
+      "ideology": "C",
+      "rating": "High",
+      "url": "https://thehill.com/"
+    },
+    "axios.com": {
+      "label": "Axios",
+      "country": "USA",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://axios.com/"
+    },
+    "pbs.org": {
+      "label": "PBS",
+      "country": "USA",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://pbs.org/"
+    },
+    "abcnews.go.com": {
+      "label": "ABC News",
+      "country": "USA",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://abcnews.go.com/"
+    },
+    "cbsnews.com": {
+      "label": "CBS News",
+      "country": "USA",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://cbsnews.com/"
+    },
+    "nbcnews.com": {
+      "label": "NBC News",
+      "country": "USA",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://nbcnews.com/"
+    },
+    "theatlantic.com": {
+      "label": "The Atlantic",
+      "country": "USA",
+      "bias": "left",
+      "factual": "High",
+      "ideology": "L",
+      "rating": "High",
+      "url": "https://theatlantic.com/"
+    },
+    "vox.com": {
+      "label": "Vox",
+      "country": "USA",
+      "bias": "left",
+      "factual": "MostlyFactual",
+      "ideology": "L",
+      "rating": "MostlyFactual",
+      "url": "https://vox.com/"
+    },
+    "motherjones.com": {
+      "label": "Mother Jones",
+      "country": "USA",
+      "bias": "left",
+      "factual": "High",
+      "ideology": "L",
+      "rating": "High",
+      "url": "https://motherjones.com/"
+    },
+    "huffpost.com": {
+      "label": "HuffPost",
+      "country": "USA",
+      "bias": "left",
+      "factual": "MostlyFactual",
+      "ideology": "L",
+      "rating": "MostlyFactual",
+      "url": "https://huffpost.com/"
+    },
+    "msnbc.com": {
+      "label": "MSNBC",
+      "country": "USA",
+      "bias": "left",
+      "factual": "Mixed",
+      "ideology": "L",
+      "rating": "Mixed",
+      "url": "https://msnbc.com/"
+    },
+    "foxnews.com": {
+      "label": "Fox News",
+      "country": "USA",
+      "bias": "right",
+      "factual": "Mixed",
+      "ideology": "R",
+      "rating": "Mixed",
+      "url": "https://foxnews.com/"
+    },
+    "nypost.com": {
+      "label": "New York Post",
+      "country": "USA",
+      "bias": "right",
+      "factual": "Mixed",
+      "ideology": "R",
+      "rating": "Mixed",
+      "url": "https://nypost.com/"
+    },
+    "nationalreview.com": {
+      "label": "National Review",
+      "country": "USA",
+      "bias": "right",
+      "factual": "MostlyFactual",
+      "ideology": "R",
+      "rating": "MostlyFactual",
+      "url": "https://nationalreview.com/"
+    },
+    "reason.com": {
+      "label": "Reason",
+      "country": "USA",
+      "bias": "right-center",
+      "factual": "MostlyFactual",
+      "ideology": "RC",
+      "rating": "MostlyFactual",
+      "url": "https://reason.com/"
+    },
+    "thedispatch.com": {
+      "label": "The Dispatch",
+      "country": "USA",
+      "bias": "right-center",
+      "factual": "High",
+      "ideology": "RC",
+      "rating": "High",
+      "url": "https://thedispatch.com/"
+    },
+    "propublica.org": {
+      "label": "ProPublica",
+      "country": "USA",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://propublica.org/"
+    },
+    "pewresearch.org": {
+      "label": "Pew Research Center",
+      "country": "USA",
+      "bias": "center",
+      "factual": "Veryhigh",
+      "ideology": "C",
+      "rating": "Veryhigh",
+      "url": "https://pewresearch.org/"
+    },
+    "snopes.com": {
+      "label": "Snopes",
+      "country": "USA",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://snopes.com/"
+    },
+    "politifact.com": {
+      "label": "PolitiFact",
+      "country": "USA",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://politifact.com/"
+    },
+    "bostonglobe.com": {
+      "label": "The Boston Globe",
+      "country": "USA",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://bostonglobe.com/"
+    },
+    "latimes.com": {
+      "label": "Los Angeles Times",
+      "country": "USA",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://latimes.com/"
+    },
+    "chicagotribune.com": {
+      "label": "Chicago Tribune",
+      "country": "USA",
+      "bias": "right-center",
+      "factual": "High",
+      "ideology": "RC",
+      "rating": "High",
+      "url": "https://chicagotribune.com/"
+    },
+    "usnews.com": {
+      "label": "U.S. News & World Report",
+      "country": "USA",
+      "bias": "center",
+      "factual": "High",
+      "ideology": "C",
+      "rating": "High",
+      "url": "https://usnews.com/"
+    },
+    "thedailybeast.com": {
+      "label": "The Daily Beast",
+      "country": "USA",
+      "bias": "left",
+      "factual": "MostlyFactual",
+      "ideology": "L",
+      "rating": "MostlyFactual",
+      "url": "https://thedailybeast.com/"
+    },
+    "newsweek.com": {
+      "label": "Newsweek",
+      "country": "USA",
+      "bias": "left-center",
+      "factual": "Mixed",
+      "ideology": "LC",
+      "rating": "Mixed",
+      "url": "https://newsweek.com/"
+    },
+    "washingtontimes.com": {
+      "label": "The Washington Times",
+      "country": "USA",
+      "bias": "right",
+      "factual": "Mixed",
+      "ideology": "R",
+      "rating": "Mixed",
+      "url": "https://washingtontimes.com/"
+    },
+    "slate.com": {
+      "label": "Slate",
+      "country": "USA",
+      "bias": "left",
+      "factual": "MostlyFactual",
+      "ideology": "L",
+      "rating": "MostlyFactual",
+      "url": "https://slate.com/"
+    },
+    "cbc.ca": {
+      "label": "CBC News",
+      "country": "Canada",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://cbc.ca/"
+    },
+    "theglobeandmail.com": {
+      "label": "The Globe and Mail",
+      "country": "Canada",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://theglobeandmail.com/"
+    },
+    "nationalpost.com": {
+      "label": "National Post",
+      "country": "Canada",
+      "bias": "right-center",
+      "factual": "High",
+      "ideology": "RC",
+      "rating": "High",
+      "url": "https://nationalpost.com/"
+    },
+    "ctvnews.ca": {
+      "label": "CTV News",
+      "country": "Canada",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://ctvnews.ca/"
+    },
+    "theguardian.com": {
+      "label": "The Guardian",
+      "country": "UK",
+      "bias": "left-center",
+      "factual": "Mixed",
+      "ideology": "LC",
+      "rating": "Mixed",
+      "url": "https://theguardian.com/"
+    },
+    "telegraph.co.uk": {
+      "label": "The Telegraph",
+      "country": "UK",
+      "bias": "right-center",
+      "factual": "MostlyFactual",
+      "ideology": "RC",
+      "rating": "MostlyFactual",
+      "url": "https://telegraph.co.uk/"
+    },
+    "independent.co.uk": {
+      "label": "The Independent",
+      "country": "UK",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://independent.co.uk/"
+    },
+    "thetimes.co.uk": {
+      "label": "The Times",
+      "country": "UK",
+      "bias": "right-center",
+      "factual": "High",
+      "ideology": "RC",
+      "rating": "High",
+      "url": "https://thetimes.co.uk/"
+    },
+    "irishtimes.com": {
+      "label": "The Irish Times",
+      "country": "Ireland",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://irishtimes.com/"
+    },
+    "rte.ie": {
+      "label": "RTÉ",
+      "country": "Ireland",
+      "bias": "center",
+      "factual": "High",
+      "ideology": "C",
+      "rating": "High",
+      "url": "https://rte.ie/"
+    },
+    "abc.net.au": {
+      "label": "ABC News (Australia)",
+      "country": "Australia",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://abc.net.au/"
+    },
+    "smh.com.au": {
+      "label": "The Sydney Morning Herald",
+      "country": "Australia",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://smh.com.au/"
+    },
+    "theage.com.au": {
+      "label": "The Age",
+      "country": "Australia",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://theage.com.au/"
+    },
+    "theaustralian.com.au": {
+      "label": "The Australian",
+      "country": "Australia",
+      "bias": "right-center",
+      "factual": "MostlyFactual",
+      "ideology": "RC",
+      "rating": "MostlyFactual",
+      "url": "https://theaustralian.com.au/"
+    },
+    "nzherald.co.nz": {
+      "label": "The New Zealand Herald",
+      "country": "New Zealand",
+      "bias": "center",
+      "factual": "High",
+      "ideology": "C",
+      "rating": "High",
+      "url": "https://nzherald.co.nz/"
+    },
+    "rnz.co.nz": {
+      "label": "Radio New Zealand",
+      "country": "New Zealand",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://rnz.co.nz/"
+    },
+    "dw.com": {
+      "label": "Deutsche Welle",
+      "country": "Germany",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://dw.com/"
+    },
+    "spiegel.de": {
+      "label": "Der Spiegel",
+      "country": "Germany",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://spiegel.de/"
+    },
+    "zeit.de": {
+      "label": "Die Zeit",
+      "country": "Germany",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://zeit.de/"
+    },
+    "lemonde.fr": {
+      "label": "Le Monde",
+      "country": "France",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://lemonde.fr/"
+    },
+    "lefigaro.fr": {
+      "label": "Le Figaro",
+      "country": "France",
+      "bias": "right-center",
+      "factual": "High",
+      "ideology": "RC",
+      "rating": "High",
+      "url": "https://lefigaro.fr/"
+    },
+    "france24.com": {
+      "label": "France 24",
+      "country": "France",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://france24.com/"
+    },
+    "euronews.com": {
+      "label": "Euronews",
+      "country": "France",
+      "bias": "center",
+      "factual": "High",
+      "ideology": "C",
+      "rating": "High",
+      "url": "https://euronews.com/"
+    },
+    "elpais.com": {
+      "label": "El País",
+      "country": "Spain",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://elpais.com/"
+    },
+    "swissinfo.ch": {
+      "label": "SWI swissinfo.ch",
+      "country": "Switzerland",
+      "bias": "center",
+      "factual": "High",
+      "ideology": "C",
+      "rating": "High",
+      "url": "https://swissinfo.ch/"
+    },
+    "ansa.it": {
+      "label": "ANSA",
+      "country": "Italy",
+      "bias": "center",
+      "factual": "High",
+      "ideology": "C",
+      "rating": "High",
+      "url": "https://ansa.it/"
+    },
+    "politico.eu": {
+      "label": "Politico Europe",
+      "country": "Belgium",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://politico.eu/"
+    },
+    "japantimes.co.jp": {
+      "label": "The Japan Times",
+      "country": "Japan",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://japantimes.co.jp/"
+    },
+    "asahi.com": {
+      "label": "The Asahi Shimbun",
+      "country": "Japan",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://asahi.com/"
+    },
+    "nhk.or.jp": {
+      "label": "NHK",
+      "country": "Japan",
+      "bias": "center",
+      "factual": "High",
+      "ideology": "C",
+      "rating": "High",
+      "url": "https://nhk.or.jp/"
+    },
+    "thehindu.com": {
+      "label": "The Hindu",
+      "country": "India",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://thehindu.com/"
+    },
+    "indianexpress.com": {
+      "label": "The Indian Express",
+      "country": "India",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://indianexpress.com/"
+    },
+    "ndtv.com": {
+      "label": "NDTV",
+      "country": "India",
+      "bias": "left-center",
+      "factual": "MostlyFactual",
+      "ideology": "LC",
+      "rating": "MostlyFactual",
+      "url": "https://ndtv.com/"
+    },
+    "channelnewsasia.com": {
+      "label": "CNA (Channel NewsAsia)",
+      "country": "Singapore",
+      "bias": "center",
+      "factual": "High",
+      "ideology": "C",
+      "rating": "High",
+      "url": "https://channelnewsasia.com/"
+    },
+    "koreaherald.com": {
+      "label": "The Korea Herald",
+      "country": "South Korea",
+      "bias": "center",
+      "factual": "High",
+      "ideology": "C",
+      "rating": "High",
+      "url": "https://koreaherald.com/"
+    },
+    "timesofisrael.com": {
+      "label": "The Times of Israel",
+      "country": "Israel",
+      "bias": "center",
+      "factual": "High",
+      "ideology": "C",
+      "rating": "High",
+      "url": "https://timesofisrael.com/"
+    },
+    "haaretz.com": {
+      "label": "Haaretz",
+      "country": "Israel",
+      "bias": "left-center",
+      "factual": "High",
+      "ideology": "LC",
+      "rating": "High",
+      "url": "https://haaretz.com/"
+    },
+    "jpost.com": {
+      "label": "The Jerusalem Post",
+      "country": "Israel",
+      "bias": "right-center",
+      "factual": "MostlyFactual",
+      "ideology": "RC",
+      "rating": "MostlyFactual",
+      "url": "https://jpost.com/"
+    },
+    "aljazeera.com": {
+      "label": "Al Jazeera",
+      "country": "Qatar",
+      "bias": "left-center",
+      "factual": "Mixed",
+      "ideology": "LC",
+      "rating": "Mixed",
+      "url": "https://aljazeera.com/"
+    },
+    "nature.com": {
+      "label": "Nature",
+      "country": "UK",
+      "bias": "center",
+      "factual": "Veryhigh",
+      "ideology": "C",
+      "rating": "Veryhigh",
+      "url": "https://nature.com/"
     }
   }
 }
