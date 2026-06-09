@@ -62,7 +62,12 @@ export async function fetchGdeltBundle(input, signal, outputLanguage = "en") {
     state.gdeltCooldownUntil = cooldown;
     await chrome.storage.local.set({ gdeltCooldownUntil: cooldown });
   }
-  await setGdeltCachedBundle(cacheKey, bundle);
+  // Only cache successful results. Caching an error (especially a 429) would
+  // replay the failure for the full cache TTL and bypass the cooldown logic,
+  // making the rate-limit message appear "stuck" long after GDELT recovered.
+  if (!bundle.errorMessage) {
+    await setGdeltCachedBundle(cacheKey, bundle);
+  }
   return bundle;
 }
 
@@ -100,19 +105,31 @@ export async function setGdeltCachedBundle(cacheKey, bundle) {
   });
 }
 
+// The last-request timestamp is persisted so the minimum interval is honored
+// even across side-panel reloads (in-memory state alone resets to 0 on reload,
+// which would let the first request after a reopen fire too soon and get a 429).
+async function getGdeltLastRequestAt() {
+  const { gdeltLastRequestAt: stored } = await chrome.storage.local.get({ gdeltLastRequestAt: 0 });
+  return Math.max(Number(state.gdeltLastRequestAt) || 0, Number(stored) || 0);
+}
+
+async function setGdeltLastRequestAt(value) {
+  state.gdeltLastRequestAt = value;
+  await chrome.storage.local.set({ gdeltLastRequestAt: value });
+}
+
 export function enqueueGdeltRequest(task) {
   const next = state.gdeltRequestChain.then(async () => {
-    const now = Date.now();
-    const elapsed = now - state.gdeltLastRequestAt;
+    const elapsed = Date.now() - (await getGdeltLastRequestAt());
     if (elapsed < gdeltMinIntervalMs) {
       await sleep(gdeltMinIntervalMs - elapsed, null);
     }
 
-    state.gdeltLastRequestAt = Date.now();
+    await setGdeltLastRequestAt(Date.now());
     try {
       return await task();
     } finally {
-      state.gdeltLastRequestAt = Date.now();
+      await setGdeltLastRequestAt(Date.now());
     }
   });
 
@@ -359,15 +376,20 @@ export async function buildGdeltQueries(input, signal) {
 }
 
 export async function buildPromptDrivenGdeltQuery(input, signal) {
-  const text = [
-    String(input?.analysisText || "").trim(),
-    String(input?.selectionText || "").trim(),
-    String(input?.title || "").trim(),
-    String(input?.pageText || "").trim()
-  ]
+  // The user's selection IS the claim to verify, so it leads. We avoid repeating
+  // the same paragraph across analysisText/selectionText and avoid dumping the
+  // full page text when a selection exists — both dilute the model's attention
+  // and let it latch onto an entity-dense but secondary sentence instead of the
+  // main claim.
+  const claim = String(input?.selectionText || "").trim()
+    || String(input?.analysisText || "").trim()
+    || String(input?.pageText || "").trim();
+  const title = String(input?.title || "").trim();
+  const text = [claim, title]
     .filter(Boolean)
     .join("\n\n")
-    .trim();
+    .trim()
+    .slice(0, 2000);
 
   if (!text) return "";
 
@@ -388,13 +410,13 @@ export async function buildPromptDrivenGdeltQuery(input, signal) {
     });
 
     const queryPrompt = [
-      "You are generating a GDELT news search query.",
-      "Return only one short English query string.",
-      "Do not explain, do not use markdown, do not use quotes, and do not include bullets.",
-      "Keep only the most important named entities, organizations, locations, dates, numbers, and event or action words.",
+      "You are creating a news search query to fact-check a specific claim.",
+      "From the text below, identify the SINGLE main claim it is making — usually the first or most prominent statement — and ignore secondary, background, or example details mentioned later.",
+      "Output one short English search query (4 to 8 words) using only the key searchable terms of that main claim: its core subject, organizations, products, locations, dates, numbers, and the main action.",
+      "If the main subject is unnamed (for example 'an unnamed company'), do NOT switch to a different, named topic from a later sentence; instead use the other concrete terms of the main claim, such as the product, the amount, or the reporting outlet.",
+      "Return only the query string: no explanation, no markdown, no quotes, and no bullets.",
       "Avoid filler words and avoid tokens shorter than 3 characters.",
-      "Prefer 4 to 8 words total.",
-      "Text:",
+      "Claim text:",
       text
     ].join("\n");
 
@@ -425,8 +447,10 @@ export function cleanGdeltQuery(value) {
     if (!token) continue;
     const shortToken = token.length < 3;
     const numericToken = /^\d+(?:[.,]\d+)?%?$/.test(token);
-    const upperTicker = /^[A-Z]{3,5}$/.test(token);
-    if (shortToken && !numericToken && !upperTicker) continue;
+    // Keep short all-caps acronyms (AI, EU, UN, US, NASA) — they are meaningful
+    // search terms even though they fall under the 3-char minimum.
+    const upperAcronym = /^[A-Z]{2,5}$/.test(token);
+    if (shortToken && !numericToken && !upperAcronym) continue;
     const key = token.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);

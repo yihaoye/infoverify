@@ -177,6 +177,7 @@ export async function runLocalAnalysis(input, signal) {
     evidence: mergeEvidenceLists(normalizeEvidence(parsed.evidence, preparedInput), gdeltBundle.items, preparedInput),
     conflicts: normalizeList(parsed.conflicts),
     missing: normalizeList(parsed.missing),
+    gdelt_query: gdeltBundle.query || "",
     gdelt_summary: gdeltBundle.summary,
     reproducibility_summary: buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage),
     cross_validation_summary: buildCrossValidationSummary(gdeltBundle, outputLanguage),

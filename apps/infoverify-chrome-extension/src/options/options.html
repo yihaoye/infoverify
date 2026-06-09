@@ -50,8 +50,11 @@
         font-weight: 600;
         margin-bottom: 8px;
       }
-      select {
+      select,
+      input[type="text"],
+      input[type="password"] {
         width: 100%;
+        box-sizing: border-box;
         border: 1px solid #d1d5db;
         border-radius: 12px;
         padding: 10px 12px;
@@ -62,6 +65,14 @@
         margin-top: 8px;
         color: #6b7280;
         font-size: 13px;
+      }
+      .help a {
+        color: #4338ca;
+        font-weight: 600;
+        text-decoration: none;
+      }
+      .help a:hover {
+        text-decoration: underline;
       }
       .status {
         margin-top: 12px;
@@ -93,6 +104,26 @@
           <option value="zh">Chinese</option>
         </select>
         <div class="help">Local AI still uses English prompts; Chinese output is generated through a local translation layer.</div>
+      </div>
+
+      <div class="field">
+        <label for="cloudApiKey">Cloud AI — Gemini API key (optional)</label>
+        <input id="cloudApiKey" type="password" autocomplete="off" spellcheck="false" placeholder="AIza… (leave blank to keep Cloud AI disabled)" />
+        <div class="help">
+          Don’t have a key?
+          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Create one for free in Google AI Studio</a>,
+          then paste it here.
+        </div>
+        <div class="help">
+          Enables the “Cloud AI” button in the side panel. Cloud AI sends the selected text and current page
+          content to Google’s Gemini API using your key, and uses Google Search for cross-validation. Your key
+          is stored locally on this device only (never synced). Leave blank to keep everything local.
+        </div>
+      </div>
+      <div class="field">
+        <label for="cloudModel">Cloud AI — model</label>
+        <input id="cloudModel" type="text" autocomplete="off" spellcheck="false" placeholder="gemini-2.5-flash" />
+        <div class="help">Any Gemini model id your key can access. Defaults to gemini-2.5-flash.</div>
       </div>
       <div class="status" id="saveStatus" aria-live="polite"></div>
     </div>

@@ -1,15 +1,25 @@
 // ---------- Panel entry point: wires UI events and Chrome messaging ----------
 import { DEBUG_PREFIX } from "./modules/constants.js";
 import { state } from "./modules/state.js";
-import { localModeButtonEl, downloadModelButtonEl, debugCopyButtonEl, debugStatusEl } from "./modules/dom.js";
+import { localModeButtonEl, cloudModeButtonEl, downloadModelButtonEl, debugCopyButtonEl, debugStatusEl } from "./modules/dom.js";
 import { updateModeButtons, renderVerification } from "./modules/render.js";
 import { requestRun, startVerification, hydrateInitialState } from "./modules/verification.js";
 import { getModelAvailability, downloadModel } from "./modules/model.js";
-import { reportError } from "./modules/logging.js";
+import { isCloudConfigured } from "./modules/cloud.js";
+import { reportError, setStatus } from "./modules/logging.js";
 
 // ---------- UI events ----------
 localModeButtonEl.addEventListener("click", () => {
-  void requestRun().then(() => refreshModelButton().catch(() => {}));
+  void requestRun("local").then(() => refreshModelButton().catch(() => {}));
+});
+
+cloudModeButtonEl?.addEventListener("click", async () => {
+  if (!(await isCloudConfigured())) {
+    setStatus("Add your Gemini API key in Settings to use Cloud AI.");
+    chrome.runtime.openOptionsPage?.();
+    return;
+  }
+  void requestRun("cloud");
 });
 
 // Reflects the local model's download state on the dedicated button: hidden when

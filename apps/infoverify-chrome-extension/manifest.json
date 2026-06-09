@@ -11,7 +11,8 @@
     "activeTab"
   ],
   "host_permissions": [
-    "https://api.gdeltproject.org/*"
+    "https://api.gdeltproject.org/*",
+    "https://generativelanguage.googleapis.com/*"
   ],
   "background": {
     "service_worker": "src/background.js",

@@ -19,21 +19,27 @@ import {
   detailNoteEl,
   evidenceEl,
   gdeltSummaryEl,
+  gdeltQueryEl,
   llmVerdictPillEl,
   llmConfidenceEl,
   llmRationaleEl,
   modePillEl,
-  localModeButtonEl
+  localModeButtonEl,
+  cloudModeButtonEl
 } from "./dom.js";
 import { setStatus, setDebugTrace } from "./logging.js";
 import { normalizeRuleScores, formatScore } from "./normalize.js";
 
-export function updateModeButtons() {
-  localModeButtonEl.classList.add("active");
-  modePillEl.textContent = "Local AI";
+export function updateModeButtons(mode = "local") {
+  const isCloud = mode === "cloud";
+  localModeButtonEl.classList.toggle("active", !isCloud);
+  if (cloudModeButtonEl) {
+    cloudModeButtonEl.classList.toggle("active", isCloud);
+  }
+  modePillEl.textContent = isCloud ? "Cloud AI" : "Local AI";
 }
 
-export function setLoading(loading) {
+export function setLoading(loading, mode = "local") {
   if (loading) {
     if (state.loadingHideTimer) {
       window.clearTimeout(state.loadingHideTimer);
@@ -43,10 +49,12 @@ export function setLoading(loading) {
     thinkingBannerEl.classList.add("active");
     if (statusEl) {
       statusEl.classList.add("thinking");
-      setStatus("Calling local AI...");
+      setStatus(mode === "cloud" ? "Calling cloud AI (Gemini)..." : "Calling local AI...");
     }
-    thinkingTextEl.textContent = "Analyzing text, searching GDELT news, and generating a local conclusion";
-    updateModeButtons();
+    thinkingTextEl.textContent = mode === "cloud"
+      ? "Analyzing text, searching the web, and generating a conclusion"
+      : "Analyzing text, searching GDELT news, and generating a local conclusion";
+    updateModeButtons(mode);
     return;
   }
 
@@ -68,13 +76,15 @@ export function resetResultsView() {
   summaryEl.textContent = "—";
   renderRuleScores(null, null);
   renderEvidence([]);
+  gdeltQueryEl.textContent = "—";
   gdeltSummaryEl.textContent = "—";
   setLLMAssessment(null);
   setDebugTrace("");
 }
 
 export function renderVerification(payload) {
-  updateModeButtons();
+  const mode = payload?.mode === "cloud" ? "cloud" : "local";
+  updateModeButtons(mode);
   setLoading(false);
   setStatus("Done");
   setVerdict(payload.verdict, payload.confidence);
@@ -85,6 +95,7 @@ export function renderVerification(payload) {
     reproducibility: payload.reproducibility_summary || ""
   });
   renderEvidence(payload.evidence);
+  gdeltQueryEl.textContent = payload.gdelt_query || "—";
   gdeltSummaryEl.textContent = payload.gdelt_summary || "—";
   setLLMAssessment(payload.llm_assessment || null);
   setDebugTrace(payload.debug_trace || payload.llm_assessment?.debug_trace || "");

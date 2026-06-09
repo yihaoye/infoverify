@@ -1,9 +1,16 @@
 // ---------- Shared constants and localized fallback copy ----------
 export const DEBUG_PREFIX = "[InfoVerify]";
 export const minLoadingMs = 700;
-export const gdeltMinIntervalMs = 5200;
+// GDELT enforces "one request every 5 seconds"; keep a safety margin above it to
+// absorb clock skew and request latency so consecutive calls don't trip the 429.
+export const gdeltMinIntervalMs = 6000;
 export const gdeltCacheTtlMs = 15 * 60 * 1000;
 export const gdeltCooldownMs = 2 * 60 * 1000;
+
+// ---------- Cloud AI (BYOK) defaults ----------
+// Only Google Gemini is supported for now. The model is user-editable in Options.
+export const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
+export const GEMINI_DEFAULT_MODEL = "gemini-2.5-flash";
 
 export const SUPPORTED_OUTPUT_LANGUAGES = new Set(["en", "es", "ja", "zh"]);
 export const SUPPORTED_MODEL_OUTPUT_LANGUAGES = new Set(["en", "es", "ja"]);

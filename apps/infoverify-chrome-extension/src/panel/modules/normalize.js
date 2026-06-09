@@ -17,13 +17,14 @@ export function normalizeResult(payload, mode, input) {
     llm_assessment: payload?.llm_assessment || null,
     debug_trace: String(payload?.debug_trace || ""),
     mode,
+    gdelt_query: String(payload?.gdelt_query || ""),
     gdelt_summary: String(payload?.gdelt_summary || ""),
     reproducibility_summary: String(payload?.reproducibility_summary || ""),
     cross_validation_summary: String(payload?.cross_validation_summary || ""),
     specificity_summary: String(payload?.specificity_summary || "")
   };
 
-  if (!result.llm_assessment && mode === "local") {
+  if (!result.llm_assessment) {
     result.llm_assessment = {
       verdict: result.verdict === "supported" ? "high" : result.verdict === "contradicted" ? "low" : "unclear",
       confidence: result.confidence,

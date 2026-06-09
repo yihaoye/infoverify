@@ -9,7 +9,12 @@ import {
   renderVerification
 } from "./render.js";
 import { runLocalAnalysis } from "./analysis.js";
+import { runCloudAnalysis } from "./cloud.js";
 import { normalizeResult, errorResult } from "./normalize.js";
+
+function resolveMode(value) {
+  return value === "cloud" ? "cloud" : "local";
+}
 
 export async function hydrateInitialState() {
   const { currentVerification: stored } = await chrome.storage.session.get({
@@ -21,30 +26,28 @@ export async function hydrateInitialState() {
     return;
   }
 
-  state.currentVerification = {
-    ...stored,
-    mode: "local"
-  };
-  updateModeButtons();
+  state.currentVerification = { ...stored };
+  const storedMode = resolveMode(stored.result?.mode || stored.mode);
+  updateModeButtons(storedMode);
 
   if (stored.state === "loading" && stored.input) {
-    await startVerification({ ...stored, mode: "local" });
+    await startVerification({ ...stored });
     return;
   }
 
   if (stored.state === "done" && stored.result) {
-    renderVerification({ ...stored.result, mode: "local" });
+    renderVerification({ ...stored.result });
   }
 }
 
-export async function requestRun() {
+export async function requestRun(mode = "local") {
   const input = state.currentVerification?.input;
   if (!input) return;
 
   const runId = crypto.randomUUID();
   const verification = {
     state: "loading",
-    mode: "local",
+    mode: resolveMode(mode),
     runId,
     input,
     startedAt: Date.now()
@@ -63,25 +66,28 @@ export async function startVerification(verification) {
     state.activeRun.controller.abort();
   }
 
+  const mode = resolveMode(verification.mode);
   const controller = new AbortController();
   state.activeRun = {
     id: verification.runId || crypto.randomUUID(),
-    mode: "local",
+    mode,
     controller
   };
 
   state.currentVerification = {
     ...verification,
     runId: state.activeRun.id,
-    mode: "local"
+    mode
   };
   await chrome.storage.session.set({ currentVerification: state.currentVerification });
 
-  setLoading(true);
+  setLoading(true, mode);
   resetResultsView();
 
   try {
-    const payload = await runLocalAnalysis(state.currentVerification.input, controller.signal);
+    const payload = mode === "cloud"
+      ? await runCloudAnalysis(state.currentVerification.input, controller.signal)
+      : await runLocalAnalysis(state.currentVerification.input, controller.signal);
 
     if (controller.signal.aborted || state.activeRun.id !== state.currentVerification.runId) return;
 
