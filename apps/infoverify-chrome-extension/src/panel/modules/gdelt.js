@@ -1,4 +1,4 @@
-// ---------- GDELT query generation, caching, throttling, and parsing ----------
+// ---------- Google News RSS query generation, caching, throttling, and parsing ----------
 import {
   DEBUG_PREFIX,
   gdeltMinIntervalMs,
@@ -14,7 +14,7 @@ export async function fetchGdeltBundle(input, signal, outputLanguage = "en") {
   const queries = await buildGdeltQueries(input, signal);
   const anchorDate = extractAnchorDate(input);
   const query = queries[0] || "";
-  console.info(`${DEBUG_PREFIX} GDELT query candidates`, {
+  console.info(`${DEBUG_PREFIX} Google News query candidates`, {
     queries,
     anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : ""
   });
@@ -42,8 +42,8 @@ export async function fetchGdeltBundle(input, signal, outputLanguage = "en") {
       query,
       items: [],
       anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : "",
-      errorMessage: `GDELT temporarily rate limited. Please try again in ${Math.ceil((cooldownUntil - Date.now()) / 1000)} seconds.`,
-      summary: summarizeGdeltBundle(query, [], `GDELT temporarily rate limited. Please try again in ${Math.ceil((cooldownUntil - Date.now()) / 1000)} seconds.`, anchorDate, outputLanguage)
+      errorMessage: `Google News temporarily rate limited. Please try again in ${Math.ceil((cooldownUntil - Date.now()) / 1000)} seconds.`,
+      summary: summarizeGdeltBundle(query, [], `Google News temporarily rate limited. Please try again in ${Math.ceil((cooldownUntil - Date.now()) / 1000)} seconds.`, anchorDate, outputLanguage)
     };
   }
 
@@ -138,13 +138,11 @@ export function enqueueGdeltRequest(task) {
 }
 
 export async function fetchGdeltItems(query, signal) {
-  const endpoint = new URL("https://api.gdeltproject.org/api/v2/doc/doc");
-  endpoint.searchParams.set("mode", "artlist");
-  endpoint.searchParams.set("format", "jsonfeed");
-  endpoint.searchParams.set("sort", "datedesc");
-  endpoint.searchParams.set("maxrecords", "8");
-  endpoint.searchParams.set("timespan", "30d");
-  endpoint.searchParams.set("query", query);
+  const endpoint = new URL("https://news.google.com/rss/search");
+  endpoint.searchParams.set("q", query);
+  endpoint.searchParams.set("hl", "en-US");
+  endpoint.searchParams.set("gl", "US");
+  endpoint.searchParams.set("ceid", "US:en");
 
   const resp = await fetch(endpoint.toString(), { signal });
   if (!resp.ok) {
@@ -174,19 +172,15 @@ export async function fetchGdeltItems(query, signal) {
   }
 
   const text = await safeReadText(resp);
-  const data = parseJsonFeed(text, endpoint.toString());
-  if (!data) {
+  const document = new DOMParser().parseFromString(text, "application/xml");
+  if (document.querySelector("parsererror")) {
     return {
       items: [],
-      errorMessage: `GDELT returned non-JSON response${text ? `: ${text.slice(0, 220)}` : ""}`,
+      errorMessage: "Google News returned invalid RSS",
       rawPreview: text.slice(0, 600)
     };
   }
-  const rawItems = Array.isArray(data?.items)
-    ? data.items
-    : Array.isArray(data?.feed?.items)
-      ? data.feed.items
-      : [];
+  const rawItems = Array.from(document.querySelectorAll("item"));
 
   return {
     items: rawItems.map(normalizeGdeltItem).filter((item) => item.title || item.url),
@@ -228,20 +222,24 @@ export function parseJsonFeed(text, endpoint) {
 }
 
 export function normalizeGdeltItem(item) {
-  const publishedAt = String(item?.date_published || item?.date_modified || item?.published || "").trim();
-  const source = String(item?.source || item?.author?.name || item?.author || item?.publisher || "").trim();
-  const quote = String(item?.content_text || item?.summary || item?.description || "").trim();
-  const url = String(item?.url || item?.external_url || item?.id || "").trim();
+  const getText = (selector) => item?.querySelector(selector)?.textContent?.trim() || "";
+  const title = getText("title");
+  const publishedAt = getText("pubDate");
+  const description = getText("description");
+  const url = getText("link");
+  const sourceNode = item?.querySelector("source");
+  const sourceURL = sourceNode?.getAttribute("url") || "";
+  const titleParts = title.split(" - ");
+  const source = sourceNode?.textContent?.trim() || (titleParts.length > 1 ? titleParts.pop().trim() : "Google News");
+  const quote = description ? new DOMParser().parseFromString(description, "text/html").body?.textContent?.trim() || "" : "";
   return {
-    title: String(item?.title || item?.id || "GDELT hit").trim(),
+    title: titleParts.join(" - ").trim() || title || url || "Google News hit",
     url,
     quote: quote ? quote.slice(0, 240) : "",
     retrieved_at: publishedAt || new Date().toISOString(),
-    source_type: "gdelt",
+    source_type: "google_news",
     source,
-    domain: normalizeHostname(url),
-    country: String(item?.country || item?.source_country || item?.sourceCountry || item?.location || "").trim(),
-    tone: String(item?.tone || item?.sentiment || item?.mood || "").trim()
+    domain: normalizeHostname(sourceURL) || normalizeHostname(url)
   };
 }
 
@@ -249,35 +247,35 @@ export function summarizeGdeltBundle(query, items, errorMessage, anchorDate, out
   const language = resolveOutputLanguage(outputLanguage);
   const copy = {
     en: {
-      failed: (message) => `GDELT search failed: ${message}`,
-      empty: (queryText) => (queryText ? `No close GDELT news events were found in the last 30 days (query: ${queryText}).` : "No close GDELT news events were found in the last 30 days."),
-      query: "GDELT query",
-      anchor: "GDELT anchor date",
-      hits: "GDELT hits in the last 30 days",
+      failed: (message) => `Google News search failed: ${message}`,
+      empty: (queryText) => (queryText ? `No close Google News results were found (query: ${queryText}).` : "No close Google News results were found."),
+      query: "Google News query",
+      anchor: "News anchor date",
+      hits: "Google News results",
       recent: "Recent events"
     },
     es: {
-      failed: (message) => `La búsqueda en GDELT falló: ${message}`,
+      failed: (message) => `La búsqueda en Google News falló: ${message}`,
       empty: (queryText) => (queryText ? `No se encontraron eventos de noticias cercanos en GDELT en los últimos 30 días (consulta: ${queryText}).` : "No se encontraron eventos de noticias cercanos en GDELT en los últimos 30 días."),
-      query: "Consulta de GDELT",
-      anchor: "Fecha ancla de GDELT",
-      hits: "Resultados de GDELT en los últimos 30 días",
+      query: "Consulta de Google News",
+      anchor: "Fecha ancla de noticias",
+      hits: "Resultados de Google News",
       recent: "Eventos recientes"
     },
     ja: {
-      failed: (message) => `GDELT 検索に失敗しました: ${message}`,
+      failed: (message) => `Google News 検索に失敗しました: ${message}`,
       empty: (queryText) => (queryText ? `直近30日間で近いGDELTニュースイベントは見つかりませんでした（検索語: ${queryText}）。` : "直近30日間で近いGDELTニュースイベントは見つかりませんでした。"),
-      query: "GDELT クエリ",
-      anchor: "GDELT アンカーデート",
-      hits: "直近30日間のGDELTヒット数",
+      query: "Google News クエリ",
+      anchor: "ニュースのアンカーデート",
+      hits: "Google News の結果",
       recent: "最近のイベント"
     },
     zh: {
-      failed: (message) => `GDELT 搜索失败：${message}`,
+      failed: (message) => `Google News 搜索失败：${message}`,
       empty: (queryText) => (queryText ? `过去 30 天未找到接近的 GDELT 新闻事件（查询：${queryText}）。` : "过去 30 天未找到接近的 GDELT 新闻事件。"),
-      query: "GDELT 查询词",
-      anchor: "GDELT 锚定日期",
-      hits: "过去 30 天 GDELT 命中数",
+      query: "Google News 查询词",
+      anchor: "新闻锚定日期",
+      hits: "Google News 结果数",
       recent: "最近事件"
     }
   }[language];

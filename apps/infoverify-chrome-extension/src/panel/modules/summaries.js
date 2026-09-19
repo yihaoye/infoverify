@@ -1,12 +1,12 @@
 // ---------- Localized summary builders for the three scoring principles ----------
 import { resolveOutputLanguage } from "./language.js";
-import { countDistinctValues, summarizeCounts, formatDateOnly } from "./utils.js";
+import { countDistinctValues, formatDateOnly } from "./utils.js";
 
 const REPRODUCIBILITY_COPY = {
   en: {
     mbfc: "MBFC",
     noMatch: "no static match or the domain has not been packaged yet.",
-    timeline: "GDELT timeline",
+    timeline: "Google News timeline",
     first: "first",
     recent: "recent",
     distinct: "distinct domains",
@@ -47,14 +47,12 @@ const REPRODUCIBILITY_COPY = {
 
 const CROSS_VALIDATION_COPY = {
   en: {
-    empty: "GDELT cross-validation: no usable news events, so independent corroboration is weak.",
-    prefix: "GDELT cross-validation",
+    empty: "Google News cross-validation: no usable news results, so independent corroboration is weak.",
+    prefix: "Google News cross-validation",
     hitsLabel: "hits",
     domainsLabel: "distinct domains",
-    countriesLabel: "source countries",
-    tone: "Tone distribution",
     span: "Time span",
-    cue: "Assessment cue: cross-validation is stronger when multiple domains, multiple countries, and consistent tone all align."
+    cue: "Assessment cue: cross-validation is stronger when multiple independent publisher domains report the claim over time."
   },
   es: {
     empty: "Validación cruzada de GDELT: no hay eventos de noticias utilizables, por lo que la corroboración independiente es débil.",
@@ -145,12 +143,9 @@ export function buildCrossValidationSummary(gdeltBundle, outputLanguage = "en") 
   }
 
   const domains = countDistinctValues(items.map((item) => item.domain).filter(Boolean));
-  const countries = countDistinctValues(items.map((item) => item.country).filter(Boolean));
-  const tones = summarizeCounts(items.map((item) => item.tone).filter(Boolean));
   const timeline = `${formatDateOnly(items[items.length - 1]?.retrieved_at)} → ${formatDateOnly(items[0]?.retrieved_at)}`;
   return [
-    `${copy.prefix}: ${items.length} ${copy.hitsLabel}, ${domains} ${copy.domainsLabel}, ${countries} ${copy.countriesLabel}`,
-    tones ? `${copy.tone}: ${tones}` : `${copy.tone}: unavailable`,
+    `${copy.prefix}: ${items.length} ${copy.hitsLabel}, ${domains} ${copy.domainsLabel}`,
     `${copy.span}: ${timeline}`,
     copy.cue
   ].join("\n");

@@ -53,7 +53,7 @@ export function setLoading(loading, mode = "local") {
     }
     thinkingTextEl.textContent = mode === "cloud"
       ? "Analyzing text, searching the web, and generating a conclusion"
-      : "Analyzing text, searching GDELT news, and generating a local conclusion";
+      : "Analyzing text, searching Google News, and generating a local conclusion";
     updateModeButtons(mode);
     return;
   }

@@ -59,15 +59,11 @@ export function scoreCrossValidation(gdeltBundle) {
   if (items.length === 0) return 0.12;
 
   const domains = countDistinctValues(items.map((item) => item.domain).filter(Boolean));
-  const countries = countDistinctValues(items.map((item) => item.country).filter(Boolean));
   const dates = countDistinctValues(items.map((item) => formatDateOnly(item.retrieved_at)).filter((value) => value && value !== UNKNOWN_DATE));
-  const toneCount = countDistinctValues(items.map((item) => item.tone).filter(Boolean));
-  const score = 0.22 +
-    Math.min(0.22, items.length * 0.04) +
-    Math.min(0.16, Math.max(0, domains - 1) * 0.08) +
-    Math.min(0.12, Math.max(0, countries - 1) * 0.06) +
-    Math.min(0.12, Math.max(0, dates - 1) * 0.05) +
-    Math.min(0.08, Math.max(0, toneCount - 1) * 0.04);
+  const score = 0.2 +
+    Math.min(0.25, items.length * 0.05) +
+    Math.min(0.3, Math.max(0, domains - 1) * 0.1) +
+    Math.min(0.25, Math.max(0, dates - 1) * 0.08);
   return clamp(score, 0, 1);
 }
 

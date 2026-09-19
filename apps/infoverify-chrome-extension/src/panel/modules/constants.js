@@ -1,9 +1,8 @@
 // ---------- Shared constants and localized fallback copy ----------
 export const DEBUG_PREFIX = "[InfoVerify]";
 export const minLoadingMs = 700;
-// GDELT enforces "one request every 5 seconds"; keep a safety margin above it to
-// absorb clock skew and request latency so consecutive calls don't trip the 429.
-export const gdeltMinIntervalMs = 6000;
+// Space requests and cache results to avoid repeated Google News RSS fetches.
+export const gdeltMinIntervalMs = 1500;
 export const gdeltCacheTtlMs = 15 * 60 * 1000;
 export const gdeltCooldownMs = 2 * 60 * 1000;
 

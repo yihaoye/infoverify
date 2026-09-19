@@ -8,15 +8,15 @@ type Item struct {
 	Source      string    `json:"source,omitempty"`
 	PublishedAt time.Time `json:"published_at,omitempty"`
 	Snippet     string    `json:"snippet,omitempty"`
-	Provider    string    `json:"provider,omitempty"` // gdelt|sec
+	Provider    string    `json:"provider,omitempty"` // google_news|sec
 }
 
 type SearchRequest struct {
-	// Query follows provider syntax. For GDELT it is the raw "query=" string.
+	// Query is a plain-language Google News search query.
 	Query string
 
-	// Timespan is a GDELT-style timespan like "1d", "24h", "1week".
-	// If empty, defaults to "24h".
+	// Timespan is an optional recent-news window such as "1d", "24h", or "7d".
+	// If empty, it defaults to the previous day.
 	Timespan string
 
 	MaxRecords int

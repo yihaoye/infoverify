@@ -61,7 +61,7 @@ export async function runLocalAnalysis(input, signal) {
       }
     });
     setStatus("Calling local AI...");
-    thinkingTextEl.textContent = "Analyzing text, searching GDELT news, and generating a local conclusion";
+    thinkingTextEl.textContent = "Analyzing text, searching Google News, and generating a local conclusion";
   } catch (err) {
     sessionError = err;
     reportError("createLanguageModelSession", err, { outputLanguage, modelOutputLanguage });
@@ -69,7 +69,7 @@ export async function runLocalAnalysis(input, signal) {
 
   const preparedInput = await prepareEnglishAnalysisInput(input, signal);
 
-  gdeltSummaryEl.textContent = "Searching GDELT news...";
+  gdeltSummaryEl.textContent = "Searching Google News...";
   let gdeltBundle;
   try {
     gdeltBundle = await fetchGdeltBundle(preparedInput, signal, outputLanguage);
@@ -79,7 +79,7 @@ export async function runLocalAnalysis(input, signal) {
       outputLanguage
     });
     const anchorDate = extractAnchorDate(preparedInput);
-    const errorMessage = `GDELT fetch failed: ${String(err?.message || err)}`;
+    const errorMessage = `Google News fetch failed: ${String(err?.message || err)}`;
     gdeltBundle = {
       query: "",
       items: [],
