@@ -15,7 +15,7 @@ When you use the extension, we may process:
 ## Where data is processed
 
 - Local AI features run in your browser using Chrome built-in AI APIs when available.
-- GDELT cross-validation requests may send a short search query derived from your input and the current page URL to GDELT.
+- Google News RSS requests may send a short search query derived from the text, title, and page content you actively choose to analyze to Google.
 - We do not require an account for the extension itself.
 
 ## What we do not do

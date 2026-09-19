@@ -14,7 +14,7 @@ const crossNoteEl = document.getElementById("crossNote");
 const detailSummaryEl = document.getElementById("detailSummary");
 const detailNoteEl = document.getElementById("detailNote");
 const evidenceEl = document.getElementById("evidence");
-const gdeltSummaryEl = document.getElementById("gdeltSummary");
+const newsSummaryEl = document.getElementById("newsSummary");
 const llmVerdictPillEl = document.getElementById("llmVerdictPill");
 const llmConfidenceEl = document.getElementById("llmConfidence");
 const llmRationaleEl = document.getElementById("llmRationale");
@@ -30,16 +30,16 @@ let currentVerification = null;
 let loadingStartAt = 0;
 let loadingHideTimer = 0;
 let activeRun = { id: "", mode: "", controller: null };
-let gdeltRequestChain = Promise.resolve();
-let gdeltLastRequestAt = 0;
+let newsRequestChain = Promise.resolve();
+let newsLastRequestAt = 0;
 let mbfcDatasetPromise = null;
-let gdeltCooldownUntil = 0;
+let newsCooldownUntil = 0;
 let lastDebugTrace = "";
 const DEBUG_PREFIX = "[InfoVerify]";
 const minLoadingMs = 700;
-const gdeltMinIntervalMs = 5200;
-const gdeltCacheTtlMs = 15 * 60 * 1000;
-const gdeltCooldownMs = 2 * 60 * 1000;
+const newsMinIntervalMs = 5200;
+const newsCacheTtlMs = 15 * 60 * 1000;
+const newsCooldownMs = 2 * 60 * 1000;
 const SUPPORTED_OUTPUT_LANGUAGES = new Set(["en", "es", "ja", "zh"]);
 const SUPPORTED_MODEL_OUTPUT_LANGUAGES = new Set(["en", "es", "ja"]);
 const OUTPUT_LANGUAGE_LABELS = {
@@ -172,8 +172,8 @@ function buildDebugTrace(fields) {
       rawPreview: truncateForDebug(fields.raw, 3500),
       parsedPreview: fields.parsed || null,
       error: fields.error || "",
-      gdeltSummary: truncateForDebug(fields.gdeltSummary, 1200),
-      gdeltRawPreview: truncateForDebug(fields.gdeltRawPreview, 1200),
+      newsSummary: truncateForDebug(fields.newsSummary, 1200),
+      newsRawPreview: truncateForDebug(fields.newsRawPreview, 1200),
       mbfc: fields.mbfc || null
     },
     null,
@@ -331,7 +331,7 @@ async function localizeAssessmentResult(result, targetLanguage, signal) {
     ...result,
     summary: await shouldTranslateText(result.summary, sourceLanguage, targetLanguage, signal),
     rationale: await shouldTranslateText(result.rationale, sourceLanguage, targetLanguage, signal),
-    gdelt_summary: await shouldTranslateText(result.gdelt_summary, sourceLanguage, targetLanguage, signal),
+    news_summary: await shouldTranslateText(result.news_summary, sourceLanguage, targetLanguage, signal),
     reproducibility_summary: await shouldTranslateText(result.reproducibility_summary, sourceLanguage, targetLanguage, signal),
     cross_validation_summary: await shouldTranslateText(result.cross_validation_summary, sourceLanguage, targetLanguage, signal),
     specificity_summary: await shouldTranslateText(result.specificity_summary, sourceLanguage, targetLanguage, signal),
@@ -389,7 +389,7 @@ function setLoading(loading) {
       statusEl.classList.add("thinking");
       setStatus("Calling local AI...");
     }
-    thinkingTextEl.textContent = "Analyzing text, searching GDELT news, and generating a local conclusion";
+    thinkingTextEl.textContent = "Analyzing text, searching Google News, and generating a local conclusion";
     updateModeButtons();
     return;
   }
@@ -477,7 +477,7 @@ async function startVerification(verification, { allowDownload = false } = {}) {
   summaryEl.textContent = "—";
   renderRuleScores(null, null);
   renderEvidence([]);
-  gdeltSummaryEl.textContent = "—";
+  newsSummaryEl.textContent = "—";
   setLLMAssessment(null);
   setDebugTrace("");
 
@@ -533,7 +533,7 @@ function renderVerification(payload) {
     reproducibility: payload.reproducibility_summary || ""
   });
   renderEvidence(payload.evidence);
-  gdeltSummaryEl.textContent = payload.gdelt_summary || "—";
+  newsSummaryEl.textContent = payload.news_summary || "—";
   setLLMAssessment(payload.llm_assessment || null);
   setDebugTrace(payload.debug_trace || payload.llm_assessment?.debug_trace || "");
 }
@@ -631,27 +631,27 @@ async function runLocalAnalysis(input, signal, { allowDownload = false } = {}) {
     throw new Error("Chrome local AI must be ready first; please click the Local AI button and try again");
   }
 
-  gdeltSummaryEl.textContent = "Searching GDELT news...";
-  let gdeltBundle;
+  newsSummaryEl.textContent = "Searching Google News...";
+  let newsBundle;
   try {
-    gdeltBundle = await fetchGdeltBundle(preparedInput, signal, outputLanguage);
+    newsBundle = await fetchNewsBundle(preparedInput, signal, outputLanguage);
   } catch (err) {
-    reportError("fetchGdeltBundle", err, {
+    reportError("fetchNewsBundle", err, {
       input: { url: preparedInput.url, title: preparedInput.title },
       outputLanguage
     });
     const anchorDate = extractAnchorDate(preparedInput);
-    const errorMessage = `GDELT fetch failed: ${String(err?.message || err)}`;
-    gdeltBundle = {
+    const errorMessage = `Google News fetch failed: ${String(err?.message || err)}`;
+    newsBundle = {
       query: "",
       items: [],
       anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : "",
       errorMessage,
       rawPreview: "",
-      summary: summarizeGdeltBundle("", [], errorMessage, anchorDate, outputLanguage)
+      summary: summarizeNewsBundle("", [], errorMessage, anchorDate, outputLanguage)
     };
   }
-  gdeltSummaryEl.textContent = gdeltBundle.summary || "—";
+  newsSummaryEl.textContent = newsBundle.summary || "—";
   const mbfcEntry = await lookupMbfcEntry(preparedInput.url || "");
   let session;
   try {
@@ -664,7 +664,7 @@ async function runLocalAnalysis(input, signal, { allowDownload = false } = {}) {
     throw new Error(`Local AI session creation failed: ${String(err?.message || err)}`);
   }
 
-  const prompt = buildLocalPrompt(preparedInput, gdeltBundle, mbfcEntry, modelOutputLanguage, outputLanguage);
+  const prompt = buildLocalPrompt(preparedInput, newsBundle, mbfcEntry, modelOutputLanguage, outputLanguage);
   let raw = "";
   try {
     raw = await promptLocalAssessment(session, prompt, signal);
@@ -683,7 +683,7 @@ async function runLocalAnalysis(input, signal, { allowDownload = false } = {}) {
   });
   const parsed = parseAssessmentJson(raw);
   if (!parsed) {
-    const fallback = buildDeterministicLocalAssessment(preparedInput, gdeltBundle, mbfcEntry, raw, outputLanguage);
+    const fallback = buildDeterministicLocalAssessment(preparedInput, newsBundle, mbfcEntry, raw, outputLanguage);
     fallback.debug_trace = buildDebugTrace({
       stage: "local-parse-fallback",
       outputLanguage,
@@ -692,8 +692,8 @@ async function runLocalAnalysis(input, signal, { allowDownload = false } = {}) {
       raw,
       parsed: null,
       error: "raw output did not parse as JSON",
-      gdeltSummary: gdeltBundle.summary,
-      gdeltRawPreview: gdeltBundle.rawPreview,
+      newsSummary: newsBundle.summary,
+      newsRawPreview: newsBundle.rawPreview,
       mbfc: mbfcEntry,
       analysisLanguage: preparedInput.analysisLanguage,
       analysisLanguageConfidence: preparedInput.analysisLanguageConfidence,
@@ -717,12 +717,12 @@ async function runLocalAnalysis(input, signal, { allowDownload = false } = {}) {
     rationale: sanitizeModelText(parsed.rationale || parsed.summary || fallbackLanguageText(outputLanguage, "analysisDone")),
     rule_scores: ruleScores,
     rule_notes: normalizeRuleNotes(parsed.rule_notes),
-    evidence: mergeEvidenceLists(normalizeEvidence(parsed.evidence, preparedInput), gdeltBundle.items, preparedInput),
+    evidence: mergeEvidenceLists(normalizeEvidence(parsed.evidence, preparedInput), newsBundle.items, preparedInput),
     conflicts: normalizeList(parsed.conflicts),
     missing: normalizeList(parsed.missing),
-    gdelt_summary: gdeltBundle.summary,
-    reproducibility_summary: buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage),
-    cross_validation_summary: buildCrossValidationSummary(gdeltBundle, outputLanguage),
+    news_summary: newsBundle.summary,
+    reproducibility_summary: buildReproducibilitySummary(newsBundle, mbfcEntry, outputLanguage),
+    cross_validation_summary: buildCrossValidationSummary(newsBundle, outputLanguage),
     specificity_summary: buildSpecificitySummary(preparedInput, outputLanguage)
   };
 
@@ -740,8 +740,8 @@ async function runLocalAnalysis(input, signal, { allowDownload = false } = {}) {
 }
 
 // ---------- Deterministic fallback assessment when model output cannot be parsed ----------
-function buildDeterministicLocalAssessment(input, gdeltBundle, mbfcEntry, raw, outputLanguage) {
-  const rule_scores = buildDeterministicRuleScores(input, gdeltBundle, mbfcEntry);
+function buildDeterministicLocalAssessment(input, newsBundle, mbfcEntry, raw, outputLanguage) {
+  const rule_scores = buildDeterministicRuleScores(input, newsBundle, mbfcEntry);
   const confidence = normalizeConfidence(averageRuleScores(rule_scores));
   const rationale = sanitizeModelText(raw) || fallbackLanguageText(outputLanguage, "noOutput");
   return {
@@ -751,25 +751,25 @@ function buildDeterministicLocalAssessment(input, gdeltBundle, mbfcEntry, raw, o
     rationale,
     rule_scores,
     rule_notes: {
-      reproducibility: buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage),
-      cross_validation: buildCrossValidationSummary(gdeltBundle, outputLanguage),
+      reproducibility: buildReproducibilitySummary(newsBundle, mbfcEntry, outputLanguage),
+      cross_validation: buildCrossValidationSummary(newsBundle, outputLanguage),
       detail_richness: buildSpecificitySummary(input, outputLanguage)
     },
-    evidence: mergeEvidenceLists(buildFallbackEvidence(input), gdeltBundle.items, input),
+    evidence: mergeEvidenceLists(buildFallbackEvidence(input), newsBundle.items, input),
     conflicts: [],
     missing: raw ? [fallbackLanguageText(outputLanguage, "jsonFallback")] : [fallbackLanguageText(outputLanguage, "noOutput")],
-    gdelt_summary: gdeltBundle.summary,
-    reproducibility_summary: buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage),
-    cross_validation_summary: buildCrossValidationSummary(gdeltBundle, outputLanguage),
+    news_summary: newsBundle.summary,
+    reproducibility_summary: buildReproducibilitySummary(newsBundle, mbfcEntry, outputLanguage),
+    cross_validation_summary: buildCrossValidationSummary(newsBundle, outputLanguage),
     specificity_summary: buildSpecificitySummary(input, outputLanguage)
   };
 }
 
 // ---------- Rule scoring helpers used by both model and fallback paths ----------
-function buildDeterministicRuleScores(input, gdeltBundle, mbfcEntry) {
+function buildDeterministicRuleScores(input, newsBundle, mbfcEntry) {
   return {
-    reproducibility: scoreReproducibility(gdeltBundle, mbfcEntry),
-    cross_validation: scoreCrossValidation(gdeltBundle),
+    reproducibility: scoreReproducibility(newsBundle, mbfcEntry),
+    cross_validation: scoreCrossValidation(newsBundle),
     detail_richness: scoreSpecificity(input)
   };
 }
@@ -785,25 +785,21 @@ function scoreSpecificity(input) {
   return clamp(score, 0, 1);
 }
 
-function scoreCrossValidation(gdeltBundle) {
-  const items = Array.isArray(gdeltBundle?.items) ? gdeltBundle.items : [];
+function scoreCrossValidation(newsBundle) {
+  const items = Array.isArray(newsBundle?.items) ? newsBundle.items : [];
   if (items.length === 0) return 0.12;
 
   const domains = countDistinctValues(items.map((item) => item.domain).filter(Boolean));
-  const countries = countDistinctValues(items.map((item) => item.country).filter(Boolean));
   const dates = countDistinctValues(items.map((item) => formatDateOnly(item.retrieved_at)).filter((value) => value && value !== "未知"));
-  const toneCount = countDistinctValues(items.map((item) => item.tone).filter(Boolean));
-  const score = 0.22 +
-    Math.min(0.22, items.length * 0.04) +
-    Math.min(0.16, Math.max(0, domains - 1) * 0.08) +
-    Math.min(0.12, Math.max(0, countries - 1) * 0.06) +
-    Math.min(0.12, Math.max(0, dates - 1) * 0.05) +
-    Math.min(0.08, Math.max(0, toneCount - 1) * 0.04);
+  const score = 0.2 +
+    Math.min(0.25, items.length * 0.05) +
+    Math.min(0.3, Math.max(0, domains - 1) * 0.1) +
+    Math.min(0.25, Math.max(0, dates - 1) * 0.08);
   return clamp(score, 0, 1);
 }
 
-function scoreReproducibility(gdeltBundle, mbfcEntry) {
-  const items = Array.isArray(gdeltBundle?.items) ? gdeltBundle.items : [];
+function scoreReproducibility(newsBundle, mbfcEntry) {
+  const items = Array.isArray(newsBundle?.items) ? newsBundle.items : [];
   const domains = countDistinctValues(items.map((item) => item.domain).filter(Boolean));
   const dates = countDistinctValues(items.map((item) => formatDateOnly(item.retrieved_at)).filter((value) => value && value !== "未知"));
   const hasMbfc = Boolean(mbfcEntry);
@@ -830,7 +826,7 @@ function normalizeResult(payload, mode, input) {
     llm_assessment: payload?.llm_assessment || null,
     debug_trace: String(payload?.debug_trace || ""),
     mode,
-    gdelt_summary: String(payload?.gdelt_summary || ""),
+    news_summary: String(payload?.news_summary || ""),
     reproducibility_summary: String(payload?.reproducibility_summary || ""),
     cross_validation_summary: String(payload?.cross_validation_summary || ""),
     specificity_summary: String(payload?.specificity_summary || "")
@@ -879,46 +875,44 @@ function errorResult({ input, mode, message }) {
       parsed: null
     }),
     mode,
-    gdelt_summary: ""
+    news_summary: ""
   };
 }
 
 // ---------- Prompt construction and output schema for the local model ----------
-function buildLocalPrompt(input, gdeltBundle, mbfcEntry, modelOutputLanguage = "en", displayLanguage = "en") {
+function buildLocalPrompt(input, newsBundle, mbfcEntry, modelOutputLanguage = "en", displayLanguage = "en") {
   const analysisText = getAnalysisText(input);
   const specificitySummary = buildSpecificitySummary(input, "en");
-  const crossValidationSummary = buildCrossValidationSummary(gdeltBundle, "en");
-  const reproducibilitySummary = buildReproducibilitySummary(gdeltBundle, mbfcEntry, "en");
+  const crossValidationSummary = buildCrossValidationSummary(newsBundle, "en");
+  const reproducibilitySummary = buildReproducibilitySummary(newsBundle, mbfcEntry, "en");
   const outputLanguageLabel = getLanguageLabel(modelOutputLanguage);
   const displayLanguageLabel = getLanguageLabel(displayLanguage);
-  const gdeltLines = Array.isArray(gdeltBundle?.items) && gdeltBundle.items.length > 0
-    ? gdeltBundle.items.map((item, index) => {
+  const newsLines = Array.isArray(newsBundle?.items) && newsBundle.items.length > 0
+    ? newsBundle.items.map((item, index) => {
         const date = item.retrieved_at ? new Date(item.retrieved_at).toISOString().slice(0, 10) : "unknown-date";
-        const source = item.source || item.source_type || "GDELT";
-        const country = item.country ? ` · ${item.country}` : "";
-        const tone = item.tone ? ` · tone=${item.tone}` : "";
+        const source = item.source || item.source_type || "Google News";
         const quote = item.quote || "";
-        return `${index + 1}. ${date}${country}${tone} · ${source} · ${item.title || item.url || "GDELT match"}${quote ? `\n   ${quote}` : ""}`;
+        return `${index + 1}. ${date} · ${source} · ${item.title || item.url || "Google News match"}${quote ? `\n   ${quote}` : ""}`;
       }).join("\n")
-    : "This query did not find a sufficiently close GDELT news event.";
-  const gdeltQueryLine = gdeltBundle?.query ? `GDELT query: ${gdeltBundle.query}` : "GDELT query: (empty)";
-  const gdeltAnchorLine = gdeltBundle?.anchorDate ? `GDELT anchor date: ${gdeltBundle.anchorDate}` : "GDELT anchor date: (none)";
+    : "This query did not find a sufficiently close Google News result.";
+  const newsQueryLine = newsBundle?.query ? `Google News query: ${newsBundle.query}` : "Google News query: (empty)";
+  const newsAnchorLine = newsBundle?.anchorDate ? `News anchor date: ${newsBundle.anchorDate}` : "News anchor date: (none)";
   return [
-    "You are an information verification assistant. Judge only from the text below, the GDELT evidence, and your training knowledge. Do not browse the web or invent outside facts.",
+    "You are an information verification assistant. Judge only from the text below, the Google News evidence, and your training knowledge. Do not browse the web or invent outside facts.",
     `Write the final answer in ${outputLanguageLabel}.`,
     displayLanguage === "zh" ? `The user interface will translate the final answer into ${displayLanguageLabel}.` : "",
     "Evaluate the statement using three principles:",
     "1) Specificity: judge the density and falsifiability of the claim itself. Focus on DIKW depth, 5W1H completeness, relevance between numbers and conclusions, precision of details, and low information entropy.",
-    "2) Cross-validation: judge whether independent sources support the claim. Focus on GDELT's distinct domains, source-country spread, tone consistency, and consistency with basic scientific knowledge.",
-    "3) Reproducibility: judge the claim's stability over time and the credibility of the source. Focus on MBFC domain reputation, whether the event persists in GDELT, first/recent appearance time, and whether different sources repeat the claim over time.",
-    "GDELT evidence is the main input for cross-validation. MBFC is only for reproducibility and source credibility.",
+    "2) Cross-validation: judge whether independent sources support the claim. Focus on distinct domains, source spread, and consistency with basic scientific knowledge.",
+    "3) Reproducibility: judge the claim's stability over time and the credibility of the source. Focus on MBFC domain reputation, first/recent appearance time, and whether different sources repeat the claim over time.",
+    "Google News evidence is the main input for cross-validation. MBFC is only for reproducibility and source credibility.",
     "Return ONLY valid JSON with these keys:",
     `{ "verdict": "supported|contradicted|unclear", "confidence": 0.0, "overall_score": 0.0, "summary": "short ${outputLanguageLabel} summary", "rationale": "short ${outputLanguageLabel} explanation", "rule_scores": {"reproducibility": 0.0, "cross_validation": 0.0, "detail_richness": 0.0}, "rule_notes": {"reproducibility": "...", "cross_validation": "...", "detail_richness": "..."}, "evidence": [{"title":"...", "url":"...", "quote":"..."}], "conflicts": ["..."], "missing": ["..."] }`,
     "Rules:",
     "- The verdict must reflect the claim's overall credibility.",
     "- confidence and overall_score must be numbers between 0 and 1.",
     "- rule_scores must correspond to reproducibility, cross_validation, and detail_richness.",
-    "- rule_notes should briefly explain why each score was assigned and should cite GDELT/MBFC clues when possible.",
+    "- rule_notes should briefly explain why each score was assigned and should cite Google News/MBFC clues when possible.",
     "- evidence quotes should be exact or near-exact excerpts from the source.",
     "- If the claim is too weak, too vague, or cannot be verified, return unclear.",
     "",
@@ -928,8 +922,8 @@ function buildLocalPrompt(input, gdeltBundle, mbfcEntry, modelOutputLanguage = "
     "Page text:",
     analysisText || input.pageText || input.selectionText || "",
     "",
-    gdeltQueryLine,
-    gdeltAnchorLine,
+    newsQueryLine,
+    newsAnchorLine,
     "Specificity cues:",
     specificitySummary,
     "",
@@ -939,8 +933,8 @@ function buildLocalPrompt(input, gdeltBundle, mbfcEntry, modelOutputLanguage = "
     "Reproducibility cues:",
     reproducibilitySummary,
     "",
-    "GDELT evidence bundle:",
-    gdeltLines
+    "Google News evidence bundle:",
+    newsLines
   ].join("\n");
 }
 
@@ -1007,13 +1001,13 @@ function normalizeMbfcEntry(entry, hostname) {
 }
 
 // ---------- Summary builders for reproducibility, cross-validation, and specificity ----------
-function buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage = "en") {
+function buildReproducibilitySummary(newsBundle, mbfcEntry, outputLanguage = "en") {
   const language = resolveOutputLanguage(outputLanguage);
   const copy = {
     en: {
       mbfc: "MBFC",
       noMatch: "no static match or the domain has not been packaged yet.",
-      timeline: "GDELT timeline",
+      timeline: "Google News timeline",
       first: "first",
       recent: "recent",
       distinct: "distinct domains",
@@ -1023,7 +1017,7 @@ function buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage = "e
     es: {
       mbfc: "MBFC",
       noMatch: "no hay coincidencia estática o el dominio aún no se ha empaquetado.",
-      timeline: "Cronología de GDELT",
+      timeline: "Cronología de Google News",
       first: "primera",
       recent: "reciente",
       distinct: "dominios distintos",
@@ -1033,7 +1027,7 @@ function buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage = "e
     ja: {
       mbfc: "MBFC",
       noMatch: "静的な一致がないか、まだそのドメインがパッケージ化されていません。",
-      timeline: "GDELT タイムライン",
+      timeline: "Google News タイムライン",
       first: "最初",
       recent: "最近",
       distinct: "異なるドメイン",
@@ -1043,7 +1037,7 @@ function buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage = "e
     zh: {
       mbfc: "MBFC",
       noMatch: "没有静态匹配，或者该域名尚未打包。",
-      timeline: "GDELT 时间线",
+      timeline: "Google News 时间线",
       first: "首次",
       recent: "最近",
       distinct: "个独立域名",
@@ -1053,7 +1047,7 @@ function buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage = "e
   }[language] || {
     mbfc: "MBFC",
     noMatch: "no static match or the domain has not been packaged yet.",
-    timeline: "GDELT timeline",
+    timeline: "Google News timeline",
     first: "first",
     recent: "recent",
     distinct: "distinct domains",
@@ -1067,10 +1061,10 @@ function buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage = "e
     lines.push(`${copy.mbfc}: ${copy.noMatch}`);
   }
 
-  if (gdeltBundle?.items?.length) {
-    const firstDate = gdeltBundle.items[gdeltBundle.items.length - 1]?.retrieved_at || "";
-    const lastDate = gdeltBundle.items[0]?.retrieved_at || "";
-    const domains = countDistinctValues(gdeltBundle.items.map((item) => item.domain).filter(Boolean));
+  if (newsBundle?.items?.length) {
+    const firstDate = newsBundle.items[newsBundle.items.length - 1]?.retrieved_at || "";
+    const lastDate = newsBundle.items[0]?.retrieved_at || "";
+    const domains = countDistinctValues(newsBundle.items.map((item) => item.domain).filter(Boolean));
     lines.push(`${copy.timeline}: ${copy.first} ${formatDateOnly(firstDate)} · ${copy.recent} ${formatDateOnly(lastDate)} · ${copy.distinct} ${domains}`);
   } else {
     lines.push(`${copy.timeline}: ${copy.noData}`);
@@ -1080,71 +1074,58 @@ function buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage = "e
   return lines.join("\n");
 }
 
-function buildCrossValidationSummary(gdeltBundle, outputLanguage = "en") {
+function buildCrossValidationSummary(newsBundle, outputLanguage = "en") {
   const language = resolveOutputLanguage(outputLanguage);
   const copy = {
     en: {
-      empty: "GDELT cross-validation: no usable news events, so independent corroboration is weak.",
-      prefix: "GDELT cross-validation",
+      empty: "Google News cross-validation: no usable news results, so independent corroboration is weak.",
+      prefix: "Google News cross-validation",
       hitsLabel: "hits",
       domainsLabel: "distinct domains",
-      countriesLabel: "source countries",
-      tone: "Tone distribution",
       span: "Time span",
-      cue: "Assessment cue: cross-validation is stronger when multiple domains, multiple countries, and consistent tone all align."
+      cue: "Assessment cue: cross-validation is stronger when multiple independent publisher domains report the claim over time."
     },
     es: {
-      empty: "Validación cruzada de GDELT: no hay eventos de noticias utilizables, por lo que la corroboración independiente es débil.",
-      prefix: "Validación cruzada de GDELT",
+      empty: "Validación cruzada de Google News: no hay resultados utilizables, por lo que la corroboración independiente es débil.",
+      prefix: "Validación cruzada de Google News",
       hitsLabel: "coincidencias",
       domainsLabel: "dominios distintos",
-      countriesLabel: "países de origen",
-      tone: "Distribución de tono",
       span: "Intervalo de tiempo",
-      cue: "Pista de evaluación: la validación cruzada es más fuerte cuando coinciden múltiples dominios, múltiples países y un tono consistente."
+      cue: "Pista de evaluación: la validación cruzada es más fuerte cuando varios dominios editoriales independientes informan sobre la afirmación a lo largo del tiempo."
     },
     ja: {
-      empty: "GDELT のクロス検証: 利用できるニュースイベントがなく、独立した裏付けは弱いです。",
-      prefix: "GDELT のクロス検証",
+      empty: "Google News のクロス検証: 利用できるニュース結果がなく、独立した裏付けは弱いです。",
+      prefix: "Google News のクロス検証",
       hitsLabel: "件のヒット",
       domainsLabel: "異なるドメイン",
-      countriesLabel: "発信国",
-      tone: "トーン分布",
       span: "期間",
-      cue: "評価の目安: 複数のドメイン、複数の国、そして一貫したトーンがそろうほどクロス検証は強くなります。"
+      cue: "評価の目安: 複数の独立した出版社ドメインが時間を通じて主張を報じるほど、クロス検証は強くなります。"
     },
     zh: {
-      empty: "GDELT 交叉验证：没有可用新闻事件，因此独立印证较弱。",
-      prefix: "GDELT 交叉验证",
+      empty: "Google News 交叉验证：没有可用新闻结果，因此独立印证较弱。",
+      prefix: "Google News 交叉验证",
       hitsLabel: "条命中",
       domainsLabel: "个独立域名",
-      countriesLabel: "个来源国家",
-      tone: "口径分布",
       span: "时间范围",
-      cue: "评估提示：当多个域名、多个国家和一致的口径同时出现时，交叉验证会更强。"
+      cue: "评估提示：当多个独立发布者域名在一段时间内报道同一主张时，交叉验证更强。"
     }
   }[language] || {
-    empty: "GDELT cross-validation: no usable news events, so independent corroboration is weak.",
-    prefix: "GDELT cross-validation",
+    empty: "Google News cross-validation: no usable news results, so independent corroboration is weak.",
+    prefix: "Google News cross-validation",
     hitsLabel: "hits",
     domainsLabel: "distinct domains",
-    countriesLabel: "source countries",
-    tone: "Tone distribution",
     span: "Time span",
-    cue: "Assessment cue: cross-validation is stronger when multiple domains, multiple countries, and consistent tone all align."
+    cue: "Assessment cue: cross-validation is stronger when multiple independent publisher domains report the claim over time."
   };
-  const items = Array.isArray(gdeltBundle?.items) ? gdeltBundle.items : [];
+  const items = Array.isArray(newsBundle?.items) ? newsBundle.items : [];
   if (items.length === 0) {
     return copy.empty;
   }
 
   const domains = countDistinctValues(items.map((item) => item.domain).filter(Boolean));
-  const countries = countDistinctValues(items.map((item) => item.country).filter(Boolean));
-  const tones = summarizeCounts(items.map((item) => item.tone).filter(Boolean));
   const timeline = `${formatDateOnly(items[items.length - 1]?.retrieved_at)} → ${formatDateOnly(items[0]?.retrieved_at)}`;
   return [
-    `${copy.prefix}: ${items.length} ${copy.hitsLabel}, ${domains} ${copy.domainsLabel}, ${countries} ${copy.countriesLabel}`,
-    tones ? `${copy.tone}: ${tones}` : `${copy.tone}: unavailable`,
+    `${copy.prefix}: ${items.length} ${copy.hitsLabel}, ${domains} ${copy.domainsLabel}`,
     `${copy.span}: ${timeline}`,
     copy.cue
   ].join("\n");
@@ -1222,16 +1203,6 @@ function countDistinctValues(values) {
   return new Set(values.filter(Boolean)).size;
 }
 
-function summarizeCounts(values) {
-  const counts = new Map();
-  for (const value of values) {
-    counts.set(value, (counts.get(value) || 0) + 1);
-  }
-  return [...counts.entries()]
-    .map(([key, value]) => `${key}:${value}`)
-    .join(" · ");
-}
-
 function formatDateOnly(value) {
   if (!value) return "未知";
   const parsed = new Date(value);
@@ -1293,12 +1264,12 @@ function mergeEvidenceLists(primary, secondary, input) {
   return merged.length > 0 ? merged : buildFallbackEvidence(input);
 }
 
-// ---------- GDELT query generation, caching, throttling, and parsing ----------
-async function fetchGdeltBundle(input, signal, outputLanguage = "en") {
-  const queries = await buildGdeltQueries(input, signal);
+// ---------- Google News query generation, caching, throttling, and parsing ----------
+async function fetchNewsBundle(input, signal, outputLanguage = "en") {
+  const queries = await buildNewsQueries(input, signal);
   const anchorDate = extractAnchorDate(input);
   const query = queries[0] || "";
-  console.info(`${DEBUG_PREFIX} GDELT query candidates`, {
+  console.info(`${DEBUG_PREFIX} Google News query candidates`, {
     queries,
     anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : ""
   });
@@ -1307,50 +1278,50 @@ async function fetchGdeltBundle(input, signal, outputLanguage = "en") {
       query: "",
       items: [],
       anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : "",
-      summary: summarizeGdeltBundle("", [], "", anchorDate, outputLanguage)
+      summary: summarizeNewsBundle("", [], "", anchorDate, outputLanguage)
     };
   }
 
-  const cacheKey = buildGdeltCacheKey(input, query, anchorDate);
-  const cached = await getGdeltCachedBundle(cacheKey);
+  const cacheKey = buildNewsCacheKey(input, query, anchorDate);
+  const cached = await getNewsCachedBundle(cacheKey);
   if (cached) {
     return {
       ...cached,
-      summary: summarizeGdeltBundle(query, cached.items || [], cached.errorMessage || "", anchorDate, outputLanguage)
+      summary: summarizeNewsBundle(query, cached.items || [], cached.errorMessage || "", anchorDate, outputLanguage)
     };
   }
 
-  const cooldownUntil = await getGdeltCooldownUntil();
+  const cooldownUntil = await getNewsCooldownUntil();
   if (cooldownUntil > Date.now()) {
     return {
       query,
       items: [],
       anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : "",
-      errorMessage: `GDELT temporarily rate limited. Please try again in ${Math.ceil((cooldownUntil - Date.now()) / 1000)} seconds.`,
-      summary: summarizeGdeltBundle(query, [], `GDELT temporarily rate limited. Please try again in ${Math.ceil((cooldownUntil - Date.now()) / 1000)} seconds.`, anchorDate, outputLanguage)
+      errorMessage: `Google News temporarily rate limited. Please try again in ${Math.ceil((cooldownUntil - Date.now()) / 1000)} seconds.`,
+      summary: summarizeNewsBundle(query, [], `Google News temporarily rate limited. Please try again in ${Math.ceil((cooldownUntil - Date.now()) / 1000)} seconds.`, anchorDate, outputLanguage)
     };
   }
 
-  const result = await enqueueGdeltRequest(() => fetchGdeltItems(query, signal));
-  const topItems = sortGdeltItems(result.items, anchorDate).slice(0, 5);
+  const result = await enqueueNewsRequest(() => fetchNewsItems(query, signal));
+  const topItems = sortNewsItems(result.items, anchorDate).slice(0, 5);
   const bundle = {
     query,
     items: topItems,
     anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : "",
     errorMessage: result.errorMessage || "",
     rawPreview: String(result.rawPreview || ""),
-    summary: summarizeGdeltBundle(query, topItems, result.errorMessage, anchorDate, outputLanguage)
+    summary: summarizeNewsBundle(query, topItems, result.errorMessage, anchorDate, outputLanguage)
   };
   if (result.errorMessage && /429/.test(result.errorMessage)) {
-    const cooldown = Date.now() + gdeltCooldownMs;
-    gdeltCooldownUntil = cooldown;
-    await chrome.storage.local.set({ gdeltCooldownUntil: cooldown });
+    const cooldown = Date.now() + newsCooldownMs;
+    newsCooldownUntil = cooldown;
+    await chrome.storage.local.set({ newsCooldownUntil: cooldown });
   }
-  await setGdeltCachedBundle(cacheKey, bundle);
+  await setNewsCachedBundle(cacheKey, bundle);
   return bundle;
 }
 
-function buildGdeltCacheKey(input, query, anchorDate) {
+function buildNewsCacheKey(input, query, anchorDate) {
   return [
     normalizeHostname(input?.url || ""),
     String(query || "").trim().toLowerCase(),
@@ -1360,13 +1331,13 @@ function buildGdeltCacheKey(input, query, anchorDate) {
   ].join("::");
 }
 
-async function getGdeltCachedBundle(cacheKey) {
-  const key = `gdeltCache:${cacheKey}`;
+async function getNewsCachedBundle(cacheKey) {
+  const key = `newsCache:${cacheKey}`;
   const { [key]: cached } = await chrome.storage.session.get({ [key]: null });
   if (!cached || typeof cached !== "object") return null;
 
   const createdAt = Number(cached.createdAt || 0);
-  if (!Number.isFinite(createdAt) || Date.now() - createdAt > gdeltCacheTtlMs) {
+  if (!Number.isFinite(createdAt) || Date.now() - createdAt > newsCacheTtlMs) {
     await chrome.storage.session.remove(key);
     return null;
   }
@@ -1374,8 +1345,8 @@ async function getGdeltCachedBundle(cacheKey) {
   return cached.bundle || null;
 }
 
-async function setGdeltCachedBundle(cacheKey, bundle) {
-  const key = `gdeltCache:${cacheKey}`;
+async function setNewsCachedBundle(cacheKey, bundle) {
+  const key = `newsCache:${cacheKey}`;
   await chrome.storage.session.set({
     [key]: {
       createdAt: Date.now(),
@@ -1384,167 +1355,136 @@ async function setGdeltCachedBundle(cacheKey, bundle) {
   });
 }
 
-function enqueueGdeltRequest(task) {
-  const next = gdeltRequestChain.then(async () => {
+function enqueueNewsRequest(task) {
+  const next = newsRequestChain.then(async () => {
     const now = Date.now();
-    const elapsed = now - gdeltLastRequestAt;
-    if (elapsed < gdeltMinIntervalMs) {
-      await sleep(gdeltMinIntervalMs - elapsed, null);
+    const elapsed = now - newsLastRequestAt;
+    if (elapsed < newsMinIntervalMs) {
+      await sleep(newsMinIntervalMs - elapsed, null);
     }
 
-    gdeltLastRequestAt = Date.now();
+    newsLastRequestAt = Date.now();
     try {
       return await task();
     } finally {
-      gdeltLastRequestAt = Date.now();
+      newsLastRequestAt = Date.now();
     }
   });
 
-  gdeltRequestChain = next.catch(() => {});
+  newsRequestChain = next.catch(() => {});
   return next;
 }
 
-async function fetchGdeltItems(query, signal) {
-  const endpoint = new URL("https://api.gdeltproject.org/api/v2/doc/doc");
-  endpoint.searchParams.set("mode", "artlist");
-  endpoint.searchParams.set("format", "jsonfeed");
-  endpoint.searchParams.set("sort", "datedesc");
-  endpoint.searchParams.set("maxrecords", "8");
-  endpoint.searchParams.set("timespan", "30d");
-  endpoint.searchParams.set("query", query);
+async function fetchNewsItems(query, signal) {
+  const endpoint = new URL("https://news.google.com/rss/search");
+  endpoint.searchParams.set("q", query);
+  endpoint.searchParams.set("hl", "en-US");
+  endpoint.searchParams.set("gl", "US");
+  endpoint.searchParams.set("ceid", "US:en");
 
   const resp = await fetch(endpoint.toString(), { signal });
   if (!resp.ok) {
     const text = await safeReadText(resp);
     const payloadPreview = text.slice(0, 600);
-    console.error(`${DEBUG_PREFIX} GDELT HTTP error`, {
+    console.error(`${DEBUG_PREFIX} Google News HTTP error`, {
       status: resp.status,
       statusText: resp.statusText,
       payloadPreview,
       endpoint: endpoint.toString()
     });
     if (resp.status === 429) {
-      const cooldown = Date.now() + gdeltCooldownMs;
-      gdeltCooldownUntil = cooldown;
-      await chrome.storage.local.set({ gdeltCooldownUntil: cooldown });
+      const cooldown = Date.now() + newsCooldownMs;
+      newsCooldownUntil = cooldown;
+      await chrome.storage.local.set({ newsCooldownUntil: cooldown });
       return {
         items: [],
-        errorMessage: `GDELT access is too frequent; please try again later (${resp.status}${text ? ` - ${text}` : ""})`,
+        errorMessage: `Google News access is too frequent; please try again later (${resp.status}${text ? ` - ${text}` : ""})`,
         rawPreview: payloadPreview
       };
     }
     return {
       items: [],
-      errorMessage: `GDELT HTTP ${resp.status}${text ? ` - ${text}` : ""}`,
+      errorMessage: `Google News HTTP ${resp.status}${text ? ` - ${text}` : ""}`,
       rawPreview: payloadPreview
     };
   }
 
   const text = await safeReadText(resp);
-  const data = parseJsonFeed(text, endpoint.toString());
-  if (!data) {
+  const document = new DOMParser().parseFromString(text, "application/xml");
+  if (document.querySelector("parsererror")) {
     return {
       items: [],
-      errorMessage: `GDELT returned non-JSON response${text ? `: ${text.slice(0, 220)}` : ""}`,
+      errorMessage: "Google News returned invalid RSS",
       rawPreview: text.slice(0, 600)
     };
   }
-  const rawItems = Array.isArray(data?.items)
-    ? data.items
-    : Array.isArray(data?.feed?.items)
-      ? data.feed.items
-      : [];
+  const rawItems = Array.from(document.querySelectorAll("item"));
 
   return {
-    items: rawItems.map(normalizeGdeltItem).filter((item) => item.title || item.url),
+    items: rawItems.map(normalizeNewsItem).filter((item) => item.title || item.url),
     errorMessage: "",
     rawPreview: text.slice(0, 600)
   };
 }
 
-function parseJsonFeed(text, endpoint) {
-  const rawText = String(text || "");
-  const candidates = [];
-  const normalized = rawText.replace(/^\uFEFF/, "").trim();
-  if (normalized) candidates.push(normalized);
-
-  const first = normalized.indexOf("{");
-  const last = normalized.lastIndexOf("}");
-  if (first >= 0 && last > first) {
-    candidates.push(normalized.slice(first, last + 1));
-  }
-
-  for (const candidate of candidates) {
-    try {
-      return JSON.parse(candidate);
-    } catch (err) {
-      console.error(`${DEBUG_PREFIX} GDELT JSON parse candidate failed`, {
-        endpoint,
-        preview: candidate.slice(0, 180),
-        error: String(err?.message || err)
-      });
-    }
-  }
-
-  const parseError = new Error(`GDELT returned non-JSON response: ${rawText ? rawText.slice(0, 220) : "empty response"}`);
-  console.error(`${DEBUG_PREFIX} GDELT non-JSON response`, parseError, {
-    endpoint,
-    payloadPreview: rawText.slice(0, 600)
-  });
-  return null;
-}
-
-function normalizeGdeltItem(item) {
-  const publishedAt = String(item?.date_published || item?.date_modified || item?.published || "").trim();
-  const source = String(item?.source || item?.author?.name || item?.author || item?.publisher || "").trim();
-  const quote = String(item?.content_text || item?.summary || item?.description || "").trim();
-  const url = String(item?.url || item?.external_url || item?.id || "").trim();
+function normalizeNewsItem(item) {
+  const getText = (selector) => item?.querySelector(selector)?.textContent?.trim() || "";
+  const title = getText("title");
+  const publishedAt = getText("pubDate");
+  const description = getText("description");
+  const url = getText("link");
+  const sourceNode = item?.querySelector("source");
+  const sourceUrl = sourceNode?.getAttribute("url") || "";
+  const sourceFromFeed = sourceNode?.textContent?.trim() || "";
+  const titleParts = title.split(" - ");
+  const source = sourceFromFeed || (titleParts.length > 1 ? titleParts.pop().trim() : "Google News");
+  const quote = description
+    ? new DOMParser().parseFromString(description, "text/html").body?.textContent?.trim() || ""
+    : "";
   return {
-    title: String(item?.title || item?.id || "GDELT hit").trim(),
+    title: titleParts.join(" - ").trim() || title || url || "Google News hit",
     url,
-    quote: quote ? quote.slice(0, 240) : "",
+    quote: quote.slice(0, 240),
     retrieved_at: publishedAt || new Date().toISOString(),
-    source_type: "gdelt",
+    source_type: "google_news",
     source,
-    domain: normalizeHostname(url),
-    country: String(item?.country || item?.source_country || item?.sourceCountry || item?.location || "").trim(),
-    tone: String(item?.tone || item?.sentiment || item?.mood || "").trim()
+    domain: normalizeHostname(sourceUrl) || normalizeHostname(url)
   };
 }
 
-function summarizeGdeltBundle(query, items, errorMessage, anchorDate, outputLanguage = "en") {
+function summarizeNewsBundle(query, items, errorMessage, anchorDate, outputLanguage = "en") {
   const language = resolveOutputLanguage(outputLanguage);
   const copy = {
     en: {
-      failed: (message) => `GDELT search failed: ${message}`,
-      empty: (queryText) => (queryText ? `No close GDELT news events were found in the last 30 days (query: ${queryText}).` : "No close GDELT news events were found in the last 30 days."),
-      query: "GDELT query",
-      anchor: "GDELT anchor date",
-      hits: "GDELT hits in the last 30 days",
+      failed: (message) => `Google News search failed: ${message}`,
+      empty: (queryText) => (queryText ? `No close Google News results were found (query: ${queryText}).` : "No close Google News results were found."),
+      query: "Google News query",
+      anchor: "News anchor date",
+      hits: "Google News results",
       recent: "Recent events"
     },
     es: {
-      failed: (message) => `La búsqueda en GDELT falló: ${message}`,
-      empty: (queryText) => (queryText ? `No se encontraron eventos de noticias cercanos en GDELT en los últimos 30 días (consulta: ${queryText}).` : "No se encontraron eventos de noticias cercanos en GDELT en los últimos 30 días."),
-      query: "Consulta de GDELT",
-      anchor: "Fecha ancla de GDELT",
-      hits: "Resultados de GDELT en los últimos 30 días",
+      failed: (message) => `La búsqueda en Google News falló: ${message}`,
+      empty: (queryText) => (queryText ? `No se encontraron resultados cercanos en Google News (consulta: ${queryText}).` : "No se encontraron resultados cercanos en Google News."),
+      query: "Consulta de Google News",
+      anchor: "Fecha ancla de noticias",
+      hits: "Resultados de Google News",
       recent: "Eventos recientes"
     },
     ja: {
-      failed: (message) => `GDELT 検索に失敗しました: ${message}`,
-      empty: (queryText) => (queryText ? `直近30日間で近いGDELTニュースイベントは見つかりませんでした（検索語: ${queryText}）。` : "直近30日間で近いGDELTニュースイベントは見つかりませんでした。"),
-      query: "GDELT クエリ",
-      anchor: "GDELT アンカーデート",
-      hits: "直近30日間のGDELTヒット数",
+      failed: (message) => `Google News 検索に失敗しました: ${message}`,
+      empty: (queryText) => (queryText ? `Google News で近い結果は見つかりませんでした（検索語: ${queryText}）。` : "Google News で近い結果は見つかりませんでした。"),
+      query: "Google News クエリ",
+      anchor: "ニュースのアンカーデート",
+      hits: "Google News の結果",
       recent: "最近のイベント"
     },
     zh: {
-      failed: (message) => `GDELT 搜索失败：${message}`,
-      empty: (queryText) => (queryText ? `过去 30 天未找到接近的 GDELT 新闻事件（查询：${queryText}）。` : "过去 30 天未找到接近的 GDELT 新闻事件。"),
-      query: "GDELT 查询词",
-      anchor: "GDELT 锚定日期",
-      hits: "过去 30 天 GDELT 命中数",
+      failed: (message) => `Google News 搜索失败：${message}`,
+      empty: (queryText) => (queryText ? `Google News 未找到接近的结果（查询：${queryText}）。` : "Google News 未找到接近的结果。"),
+      query: "Google News 查询词",
+      anchor: "新闻锚定日期",
+      hits: "Google News 结果数",
       recent: "最近事件"
     }
   }[language];
@@ -1606,7 +1546,7 @@ function extractAnchorDate(input) {
   return null;
 }
 
-function sortGdeltItems(items, anchorDate) {
+function sortNewsItems(items, anchorDate) {
   const normalizedItems = Array.isArray(items) ? [...items] : [];
   if (!anchorDate) {
     return normalizedItems.sort((left, right) => getItemDate(right) - getItemDate(left));
@@ -1629,20 +1569,22 @@ function getItemDate(item) {
   return 0;
 }
 
-async function getGdeltCooldownUntil() {
-  if (gdeltCooldownUntil > Date.now()) return gdeltCooldownUntil;
-  const { gdeltCooldownUntil: stored } = await chrome.storage.local.get({ gdeltCooldownUntil: 0 });
+async function getNewsCooldownUntil() {
+  if (newsCooldownUntil > Date.now()) return newsCooldownUntil;
+  const { newsCooldownUntil: stored } = await chrome.storage.local.get({ newsCooldownUntil: 0 });
   const value = Number(stored) || 0;
-  gdeltCooldownUntil = value;
+  newsCooldownUntil = value;
   return value;
 }
 
-async function buildGdeltQueries(input, signal) {
-  const promptQuery = await buildPromptDrivenGdeltQuery(input, signal);
+async function buildNewsQueries(input, signal) {
+  const promptQuery = await buildPromptDrivenNewsQuery(input, signal);
   return promptQuery ? [promptQuery] : [];
 }
 
-async function buildPromptDrivenGdeltQuery(input, signal) {
+async function buildPromptDrivenNewsQuery(input, signal) {
+  if (signal?.aborted) return "";
+
   const text = [
     String(input?.analysisText || "").trim(),
     String(input?.selectionText || "").trim(),
@@ -1672,7 +1614,7 @@ async function buildPromptDrivenGdeltQuery(input, signal) {
     });
 
     const queryPrompt = [
-      "You are generating a GDELT news search query.",
+      "You are generating a Google News RSS search query.",
       "Return only one short English query string.",
       "Do not explain, do not use markdown, do not use quotes, and do not include bullets.",
       "Keep only the most important named entities, organizations, locations, dates, numbers, and event or action words.",
@@ -1683,9 +1625,12 @@ async function buildPromptDrivenGdeltQuery(input, signal) {
     ].join("\n");
 
     const raw = sanitizeModelText(await session.prompt(queryPrompt, { signal }));
-    return cleanGdeltQuery(raw);
+    return cleanNewsQuery(raw);
   } catch (err) {
-    console.info(`${DEBUG_PREFIX} GDELT prompt query unavailable`, {
+    if (signal?.aborted || err?.name === "AbortError" || String(err?.message || err).includes("aborted")) {
+      return "";
+    }
+    console.info(`${DEBUG_PREFIX} Google News prompt query unavailable`, {
       message: String(err?.message || err),
       stack: err?.stack || ""
     });
@@ -1693,7 +1638,7 @@ async function buildPromptDrivenGdeltQuery(input, signal) {
   }
 }
 
-function cleanGdeltQuery(value) {
+function cleanNewsQuery(value) {
   const normalized = String(value || "")
     .normalize("NFKC")
     .replace(/["'`]/g, " ")

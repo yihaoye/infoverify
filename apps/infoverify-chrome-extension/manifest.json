@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "InfoVerify",
   "version": "0.1.0",
-  "description": "Verify selected text or current page with local AI and GDELT cross-validation in a side panel.",
+  "description": "Verify selected text or current page with local AI and Google News cross-validation in a side panel.",
   "minimum_chrome_version": "138",
   "permissions": [
     "contextMenus",
@@ -11,7 +11,7 @@
     "activeTab"
   ],
   "host_permissions": [
-    "https://api.gdeltproject.org/*"
+    "https://news.google.com/*"
   ],
   "background": {
     "service_worker": "src/background.js",

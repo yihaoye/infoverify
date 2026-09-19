@@ -19,10 +19,10 @@ func Search(ctx context.Context, req SearchRequest) (SearchResponse, error) {
 
 	items := make([]Item, 0, max*2)
 
-	// GDELT broad news coverage (free).
-	gd, gdErr := SearchGDELT(ctx, q, req.Timespan, max)
-	if gdErr == nil {
-		items = append(items, gd...)
+	// Google News RSS provides broad, free news coverage.
+	googleNewsItems, googleNewsErr := SearchGoogleNewsRSS(ctx, q, req.Timespan, max)
+	if googleNewsErr == nil {
+		items = append(items, googleNewsItems...)
 	}
 
 	// SEC filings as authoritative "news-like" sources.
@@ -47,8 +47,8 @@ func Search(ctx context.Context, req SearchRequest) (SearchResponse, error) {
 	}
 
 	warn := ""
-	if gdErr != nil {
-		warn = "gdelt failed: " + gdErr.Error()
+	if googleNewsErr != nil {
+		warn = "google news failed: " + googleNewsErr.Error()
 	}
 	if warn != "" && secWarn != "" {
 		warn = warn + "; " + secWarn
