@@ -32,7 +32,7 @@
   <main class="wrap">
     <section class="card">
       <h1>InfoVerify Privacy Policy</h1>
-      <div class="meta">Last updated: May 24, 2026</div>
+      <div class="meta">Last updated: September 20, 2026</div>
       <p>InfoVerify is a Chrome extension that analyzes the text you select or the current page URL you choose to verify.</p>
 
       <h2>Data We Process</h2>
@@ -51,6 +51,15 @@
         <li>We do not require an account for the extension itself.</li>
       </ul>
 
+      <h2>Optional Cloud AI</h2>
+      <p>Cloud AI is off by default. It runs only when you add your own Google Gemini API key in Settings and click the Cloud AI action.</p>
+      <ul>
+        <li>The selected text and current page content are sent to Google's Gemini API using your key.</li>
+        <li>Gemini may use Google Search grounding to find independent sources for cross-validation.</li>
+        <li>Your Gemini API key is stored only in local extension storage on this device and is never synced.</li>
+        <li>If you do not add a key or use Cloud AI, the extension does not send your analysis content to Gemini.</li>
+      </ul>
+
       <h2>What We Do Not Do</h2>
       <ul>
         <li>We do not sell personal data.</li>
@@ -61,6 +70,7 @@
       <h2>Storage</h2>
       <ul>
         <li>Extension settings are stored locally in Chrome sync/local storage.</li>
+        <li>The optional Gemini API key is stored in local storage only and is not synced.</li>
         <li>Debug traces are shown only in the extension UI and are copied only when you click the copy button.</li>
       </ul>
 
