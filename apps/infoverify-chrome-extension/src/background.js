@@ -3,7 +3,7 @@ const MENU_ID_VERIFY = "infoverify.verifySelection";
 chrome.runtime.onInstalled.addListener(async () => {
   chrome.contextMenus.create({
     id: MENU_ID_VERIFY,
-    title: "Verify selected text or current page",
+    title: "Fact Check the Info",
     contexts: ["selection", "page"]
   });
 

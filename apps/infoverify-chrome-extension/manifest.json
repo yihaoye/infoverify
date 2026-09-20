@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "InfoVerify",
   "version": "0.1.0",
-  "description": "Verify selected text or current page with local AI and Google News cross-validation in a side panel.",
+  "description": "Fact Check the Info by Local AI and Google News cross-validation in a side panel.",
   "minimum_chrome_version": "138",
   "permissions": [
     "contextMenus",
