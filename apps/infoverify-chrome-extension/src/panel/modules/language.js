@@ -168,7 +168,7 @@ export async function localizeAssessmentResult(result, targetLanguage, signal) {
     ...result,
     summary: await shouldTranslateText(result.summary, sourceLanguage, targetLanguage, signal),
     rationale: await shouldTranslateText(result.rationale, sourceLanguage, targetLanguage, signal),
-    gdelt_summary: await shouldTranslateText(result.gdelt_summary, sourceLanguage, targetLanguage, signal),
+    news_summary: await shouldTranslateText(result.news_summary, sourceLanguage, targetLanguage, signal),
     reproducibility_summary: await shouldTranslateText(result.reproducibility_summary, sourceLanguage, targetLanguage, signal),
     cross_validation_summary: await shouldTranslateText(result.cross_validation_summary, sourceLanguage, targetLanguage, signal),
     specificity_summary: await shouldTranslateText(result.specificity_summary, sourceLanguage, targetLanguage, signal),

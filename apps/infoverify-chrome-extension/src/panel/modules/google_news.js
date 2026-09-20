@@ -1,17 +1,11 @@
-// ---------- Google News RSS query generation, caching, throttling, and parsing ----------
-import {
-  DEBUG_PREFIX,
-  gdeltMinIntervalMs,
-  gdeltCacheTtlMs,
-  gdeltCooldownMs
-} from "./constants.js";
-import { state } from "./state.js";
+// ---------- Google News RSS query generation, caching, and parsing ----------
+import { DEBUG_PREFIX, googleNewsCacheTtlMs } from "./constants.js";
 import { resolveOutputLanguage } from "./language.js";
 import { normalizeHostname } from "./mbfc.js";
-import { sleep, safeReadText, sanitizeModelText } from "./utils.js";
+import { safeReadText, sanitizeModelText } from "./utils.js";
 
-export async function fetchGdeltBundle(input, signal, outputLanguage = "en") {
-  const queries = await buildGdeltQueries(input, signal);
+export async function fetchGoogleNewsBundle(input, signal, outputLanguage = "en") {
+  const queries = await buildGoogleNewsQueries(input, signal);
   const anchorDate = extractAnchorDate(input);
   const query = queries[0] || "";
   console.info(`${DEBUG_PREFIX} Google News query candidates`, {
@@ -23,55 +17,37 @@ export async function fetchGdeltBundle(input, signal, outputLanguage = "en") {
       query: "",
       items: [],
       anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : "",
-      summary: summarizeGdeltBundle("", [], "", anchorDate, outputLanguage)
+      summary: summarizeGoogleNewsBundle("", [], "", anchorDate, outputLanguage)
     };
   }
 
-  const cacheKey = buildGdeltCacheKey(input, query, anchorDate);
-  const cached = await getGdeltCachedBundle(cacheKey);
+  const cacheKey = buildGoogleNewsCacheKey(input, query, anchorDate);
+  const cached = await getGoogleNewsCachedBundle(cacheKey);
   if (cached) {
     return {
       ...cached,
-      summary: summarizeGdeltBundle(query, cached.items || [], cached.errorMessage || "", anchorDate, outputLanguage)
+      summary: summarizeGoogleNewsBundle(query, cached.items || [], cached.errorMessage || "", anchorDate, outputLanguage)
     };
   }
 
-  const cooldownUntil = await getGdeltCooldownUntil();
-  if (cooldownUntil > Date.now()) {
-    return {
-      query,
-      items: [],
-      anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : "",
-      errorMessage: `Google News temporarily rate limited. Please try again in ${Math.ceil((cooldownUntil - Date.now()) / 1000)} seconds.`,
-      summary: summarizeGdeltBundle(query, [], `Google News temporarily rate limited. Please try again in ${Math.ceil((cooldownUntil - Date.now()) / 1000)} seconds.`, anchorDate, outputLanguage)
-    };
-  }
-
-  const result = await enqueueGdeltRequest(() => fetchGdeltItems(query, signal));
-  const topItems = sortGdeltItems(result.items, anchorDate).slice(0, 5);
+  const result = await fetchGoogleNewsItems(query, signal);
+  const topItems = sortGoogleNewsItems(result.items, anchorDate).slice(0, 5);
   const bundle = {
     query,
     items: topItems,
     anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : "",
     errorMessage: result.errorMessage || "",
     rawPreview: String(result.rawPreview || ""),
-    summary: summarizeGdeltBundle(query, topItems, result.errorMessage, anchorDate, outputLanguage)
+    summary: summarizeGoogleNewsBundle(query, topItems, result.errorMessage, anchorDate, outputLanguage)
   };
-  if (result.errorMessage && /429/.test(result.errorMessage)) {
-    const cooldown = Date.now() + gdeltCooldownMs;
-    state.gdeltCooldownUntil = cooldown;
-    await chrome.storage.local.set({ gdeltCooldownUntil: cooldown });
-  }
-  // Only cache successful results. Caching an error (especially a 429) would
-  // replay the failure for the full cache TTL and bypass the cooldown logic,
-  // making the rate-limit message appear "stuck" long after GDELT recovered.
+  // Only cache successful results so transient RSS errors do not become stuck.
   if (!bundle.errorMessage) {
-    await setGdeltCachedBundle(cacheKey, bundle);
+    await setGoogleNewsCachedBundle(cacheKey, bundle);
   }
   return bundle;
 }
 
-export function buildGdeltCacheKey(input, query, anchorDate) {
+export function buildGoogleNewsCacheKey(input, query, anchorDate) {
   return [
     normalizeHostname(input?.url || ""),
     String(query || "").trim().toLowerCase(),
@@ -81,13 +57,13 @@ export function buildGdeltCacheKey(input, query, anchorDate) {
   ].join("::");
 }
 
-export async function getGdeltCachedBundle(cacheKey) {
-  const key = `gdeltCache:${cacheKey}`;
+export async function getGoogleNewsCachedBundle(cacheKey) {
+  const key = `googleNewsCache:${cacheKey}`;
   const { [key]: cached } = await chrome.storage.session.get({ [key]: null });
   if (!cached || typeof cached !== "object") return null;
 
   const createdAt = Number(cached.createdAt || 0);
-  if (!Number.isFinite(createdAt) || Date.now() - createdAt > gdeltCacheTtlMs) {
+  if (!Number.isFinite(createdAt) || Date.now() - createdAt > googleNewsCacheTtlMs) {
     await chrome.storage.session.remove(key);
     return null;
   }
@@ -95,8 +71,8 @@ export async function getGdeltCachedBundle(cacheKey) {
   return cached.bundle || null;
 }
 
-export async function setGdeltCachedBundle(cacheKey, bundle) {
-  const key = `gdeltCache:${cacheKey}`;
+export async function setGoogleNewsCachedBundle(cacheKey, bundle) {
+  const key = `googleNewsCache:${cacheKey}`;
   await chrome.storage.session.set({
     [key]: {
       createdAt: Date.now(),
@@ -105,39 +81,7 @@ export async function setGdeltCachedBundle(cacheKey, bundle) {
   });
 }
 
-// The last-request timestamp is persisted so the minimum interval is honored
-// even across side-panel reloads (in-memory state alone resets to 0 on reload,
-// which would let the first request after a reopen fire too soon and get a 429).
-async function getGdeltLastRequestAt() {
-  const { gdeltLastRequestAt: stored } = await chrome.storage.local.get({ gdeltLastRequestAt: 0 });
-  return Math.max(Number(state.gdeltLastRequestAt) || 0, Number(stored) || 0);
-}
-
-async function setGdeltLastRequestAt(value) {
-  state.gdeltLastRequestAt = value;
-  await chrome.storage.local.set({ gdeltLastRequestAt: value });
-}
-
-export function enqueueGdeltRequest(task) {
-  const next = state.gdeltRequestChain.then(async () => {
-    const elapsed = Date.now() - (await getGdeltLastRequestAt());
-    if (elapsed < gdeltMinIntervalMs) {
-      await sleep(gdeltMinIntervalMs - elapsed, null);
-    }
-
-    await setGdeltLastRequestAt(Date.now());
-    try {
-      return await task();
-    } finally {
-      await setGdeltLastRequestAt(Date.now());
-    }
-  });
-
-  state.gdeltRequestChain = next.catch(() => {});
-  return next;
-}
-
-export async function fetchGdeltItems(query, signal) {
+export async function fetchGoogleNewsItems(query, signal) {
   const endpoint = new URL("https://news.google.com/rss/search");
   endpoint.searchParams.set("q", query);
   endpoint.searchParams.set("hl", "en-US");
@@ -148,25 +92,15 @@ export async function fetchGdeltItems(query, signal) {
   if (!resp.ok) {
     const text = await safeReadText(resp);
     const payloadPreview = text.slice(0, 600);
-    console.error(`${DEBUG_PREFIX} GDELT HTTP error`, {
+    console.error(`${DEBUG_PREFIX} Google News HTTP error`, {
       status: resp.status,
       statusText: resp.statusText,
       payloadPreview,
       endpoint: endpoint.toString()
     });
-    if (resp.status === 429) {
-      const cooldown = Date.now() + gdeltCooldownMs;
-      state.gdeltCooldownUntil = cooldown;
-      await chrome.storage.local.set({ gdeltCooldownUntil: cooldown });
-      return {
-        items: [],
-        errorMessage: `GDELT access is too frequent; please try again later (${resp.status}${text ? ` - ${text}` : ""})`,
-        rawPreview: payloadPreview
-      };
-    }
     return {
       items: [],
-      errorMessage: `GDELT HTTP ${resp.status}${text ? ` - ${text}` : ""}`,
+      errorMessage: `Google News HTTP ${resp.status}${text ? ` - ${text}` : ""}`,
       rawPreview: payloadPreview
     };
   }
@@ -183,45 +117,13 @@ export async function fetchGdeltItems(query, signal) {
   const rawItems = Array.from(document.querySelectorAll("item"));
 
   return {
-    items: rawItems.map(normalizeGdeltItem).filter((item) => item.title || item.url),
+    items: rawItems.map(normalizeGoogleNewsItem).filter((item) => item.title || item.url),
     errorMessage: "",
     rawPreview: text.slice(0, 600)
   };
 }
 
-export function parseJsonFeed(text, endpoint) {
-  const rawText = String(text || "");
-  const candidates = [];
-  const normalized = rawText.replace(/^﻿/, "").trim();
-  if (normalized) candidates.push(normalized);
-
-  const first = normalized.indexOf("{");
-  const last = normalized.lastIndexOf("}");
-  if (first >= 0 && last > first) {
-    candidates.push(normalized.slice(first, last + 1));
-  }
-
-  for (const candidate of candidates) {
-    try {
-      return JSON.parse(candidate);
-    } catch (err) {
-      console.error(`${DEBUG_PREFIX} GDELT JSON parse candidate failed`, {
-        endpoint,
-        preview: candidate.slice(0, 180),
-        error: String(err?.message || err)
-      });
-    }
-  }
-
-  const parseError = new Error(`GDELT returned non-JSON response: ${rawText ? rawText.slice(0, 220) : "empty response"}`);
-  console.error(`${DEBUG_PREFIX} GDELT non-JSON response`, parseError, {
-    endpoint,
-    payloadPreview: rawText.slice(0, 600)
-  });
-  return null;
-}
-
-export function normalizeGdeltItem(item) {
+export function normalizeGoogleNewsItem(item) {
   const getText = (selector) => item?.querySelector(selector)?.textContent?.trim() || "";
   const title = getText("title");
   const publishedAt = getText("pubDate");
@@ -243,7 +145,7 @@ export function normalizeGdeltItem(item) {
   };
 }
 
-export function summarizeGdeltBundle(query, items, errorMessage, anchorDate, outputLanguage = "en") {
+export function summarizeGoogleNewsBundle(query, items, errorMessage, anchorDate, outputLanguage = "en") {
   const language = resolveOutputLanguage(outputLanguage);
   const copy = {
     en: {
@@ -256,7 +158,7 @@ export function summarizeGdeltBundle(query, items, errorMessage, anchorDate, out
     },
     es: {
       failed: (message) => `La búsqueda en Google News falló: ${message}`,
-      empty: (queryText) => (queryText ? `No se encontraron eventos de noticias cercanos en GDELT en los últimos 30 días (consulta: ${queryText}).` : "No se encontraron eventos de noticias cercanos en GDELT en los últimos 30 días."),
+      empty: (queryText) => (queryText ? `No se encontraron resultados cercanos en Google News (consulta: ${queryText}).` : "No se encontraron resultados cercanos en Google News."),
       query: "Consulta de Google News",
       anchor: "Fecha ancla de noticias",
       hits: "Resultados de Google News",
@@ -264,7 +166,7 @@ export function summarizeGdeltBundle(query, items, errorMessage, anchorDate, out
     },
     ja: {
       failed: (message) => `Google News 検索に失敗しました: ${message}`,
-      empty: (queryText) => (queryText ? `直近30日間で近いGDELTニュースイベントは見つかりませんでした（検索語: ${queryText}）。` : "直近30日間で近いGDELTニュースイベントは見つかりませんでした。"),
+      empty: (queryText) => (queryText ? `Google News で近い結果は見つかりませんでした（検索語: ${queryText}）。` : "Google News で近い結果は見つかりませんでした。"),
       query: "Google News クエリ",
       anchor: "ニュースのアンカーデート",
       hits: "Google News の結果",
@@ -272,7 +174,7 @@ export function summarizeGdeltBundle(query, items, errorMessage, anchorDate, out
     },
     zh: {
       failed: (message) => `Google News 搜索失败：${message}`,
-      empty: (queryText) => (queryText ? `过去 30 天未找到接近的 GDELT 新闻事件（查询：${queryText}）。` : "过去 30 天未找到接近的 GDELT 新闻事件。"),
+      empty: (queryText) => (queryText ? `Google News 未找到接近的结果（查询：${queryText}）。` : "Google News 未找到接近的结果。"),
       query: "Google News 查询词",
       anchor: "新闻锚定日期",
       hits: "Google News 结果数",
@@ -337,7 +239,7 @@ export function extractAnchorDate(input) {
   return null;
 }
 
-export function sortGdeltItems(items, anchorDate) {
+export function sortGoogleNewsItems(items, anchorDate) {
   const normalizedItems = Array.isArray(items) ? [...items] : [];
   if (!anchorDate) {
     return normalizedItems.sort((left, right) => getItemDate(right) - getItemDate(left));
@@ -360,20 +262,12 @@ export function getItemDate(item) {
   return 0;
 }
 
-export async function getGdeltCooldownUntil() {
-  if (state.gdeltCooldownUntil > Date.now()) return state.gdeltCooldownUntil;
-  const { gdeltCooldownUntil: stored } = await chrome.storage.local.get({ gdeltCooldownUntil: 0 });
-  const value = Number(stored) || 0;
-  state.gdeltCooldownUntil = value;
-  return value;
-}
-
-export async function buildGdeltQueries(input, signal) {
-  const promptQuery = await buildPromptDrivenGdeltQuery(input, signal);
+export async function buildGoogleNewsQueries(input, signal) {
+  const promptQuery = await buildPromptDrivenGoogleNewsQuery(input, signal);
   return promptQuery ? [promptQuery] : [];
 }
 
-export async function buildPromptDrivenGdeltQuery(input, signal) {
+export async function buildPromptDrivenGoogleNewsQuery(input, signal) {
   // The user's selection IS the claim to verify, so it leads. We avoid repeating
   // the same paragraph across analysisText/selectionText and avoid dumping the
   // full page text when a selection exists — both dilute the model's attention
@@ -419,9 +313,9 @@ export async function buildPromptDrivenGdeltQuery(input, signal) {
     ].join("\n");
 
     const raw = sanitizeModelText(await session.prompt(queryPrompt, { signal }));
-    return cleanGdeltQuery(raw);
+    return cleanGoogleNewsQuery(raw);
   } catch (err) {
-    console.info(`${DEBUG_PREFIX} GDELT prompt query unavailable`, {
+    console.info(`${DEBUG_PREFIX} Google News prompt query unavailable`, {
       message: String(err?.message || err),
       stack: err?.stack || ""
     });
@@ -429,7 +323,7 @@ export async function buildPromptDrivenGdeltQuery(input, signal) {
   }
 }
 
-export function cleanGdeltQuery(value) {
+export function cleanGoogleNewsQuery(value) {
   const normalized = String(value || "")
     .normalize("NFKC")
     .replace(/["'`]/g, " ")

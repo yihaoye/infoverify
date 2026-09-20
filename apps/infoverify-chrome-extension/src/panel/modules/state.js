@@ -6,10 +6,7 @@ export const state = {
   loadingStartAt: 0,
   loadingHideTimer: 0,
   activeRun: { id: "", mode: "", controller: null },
-  gdeltRequestChain: Promise.resolve(),
-  gdeltLastRequestAt: 0,
   mbfcDatasetPromise: null,
-  gdeltCooldownUntil: 0,
   lastDebugTrace: "",
   languageDetectorCache: null,
   translatorCache: new Map()

@@ -7,23 +7,23 @@ import {
   buildSpecificitySummary
 } from "./summaries.js";
 
-export function buildLocalPrompt(input, gdeltBundle, mbfcEntry, modelOutputLanguage = "en", displayLanguage = "en") {
+export function buildLocalPrompt(input, newsBundle, mbfcEntry, modelOutputLanguage = "en", displayLanguage = "en") {
   const analysisText = getAnalysisText(input);
   const specificitySummary = buildSpecificitySummary(input, "en");
-  const crossValidationSummary = buildCrossValidationSummary(gdeltBundle, "en");
-  const reproducibilitySummary = buildReproducibilitySummary(gdeltBundle, mbfcEntry, "en");
+  const crossValidationSummary = buildCrossValidationSummary(newsBundle, "en");
+  const reproducibilitySummary = buildReproducibilitySummary(newsBundle, mbfcEntry, "en");
   const outputLanguageLabel = getLanguageLabel(modelOutputLanguage);
   const displayLanguageLabel = getLanguageLabel(displayLanguage);
-  const gdeltLines = Array.isArray(gdeltBundle?.items) && gdeltBundle.items.length > 0
-    ? gdeltBundle.items.map((item, index) => {
+  const newsLines = Array.isArray(newsBundle?.items) && newsBundle.items.length > 0
+    ? newsBundle.items.map((item, index) => {
         const date = item.retrieved_at ? new Date(item.retrieved_at).toISOString().slice(0, 10) : "unknown-date";
         const source = item.source || item.source_type || "Google News";
         const quote = item.quote || "";
         return `${index + 1}. ${date} · ${source} · ${item.title || item.url || "Google News match"}${quote ? `\n   ${quote}` : ""}`;
       }).join("\n")
     : "This query did not find a sufficiently close Google News result.";
-  const gdeltQueryLine = gdeltBundle?.query ? `Google News query: ${gdeltBundle.query}` : "Google News query: (empty)";
-  const gdeltAnchorLine = gdeltBundle?.anchorDate ? `News anchor date: ${gdeltBundle.anchorDate}` : "News anchor date: (none)";
+  const newsQueryLine = newsBundle?.query ? `Google News query: ${newsBundle.query}` : "Google News query: (empty)";
+  const newsAnchorLine = newsBundle?.anchorDate ? `News anchor date: ${newsBundle.anchorDate}` : "News anchor date: (none)";
   return [
     "You are an information verification assistant. Judge only from the text below, the Google News evidence, and your training knowledge. Do not browse the web or invent outside facts.",
     `Write the final answer in ${outputLanguageLabel}.`,
@@ -49,8 +49,8 @@ export function buildLocalPrompt(input, gdeltBundle, mbfcEntry, modelOutputLangu
     "Page text:",
     analysisText || input.pageText || input.selectionText || "",
     "",
-    gdeltQueryLine,
-    gdeltAnchorLine,
+    newsQueryLine,
+    newsAnchorLine,
     "Specificity cues:",
     specificitySummary,
     "",
@@ -61,6 +61,6 @@ export function buildLocalPrompt(input, gdeltBundle, mbfcEntry, modelOutputLangu
     reproducibilitySummary,
     "",
     "Google News evidence bundle:",
-    gdeltLines
+    newsLines
   ].join("\n");
 }

@@ -18,8 +18,10 @@ import {
   detailSummaryEl,
   detailNoteEl,
   evidenceEl,
-  gdeltSummaryEl,
-  gdeltQueryEl,
+  googleNewsSummaryEl,
+  googleNewsQueryEl,
+  newsQueryLabelEl,
+  newsSummaryLabelEl,
   llmVerdictPillEl,
   llmConfidenceEl,
   llmRationaleEl,
@@ -71,13 +73,15 @@ export function setLoading(loading, mode = "local") {
 }
 
 // Clears the result cards back to their placeholder state at the start of a run.
-export function resetResultsView() {
+export function resetResultsView(mode = "local") {
   setVerdict("—");
   summaryEl.textContent = "—";
   renderRuleScores(null, null);
   renderEvidence([]);
-  gdeltQueryEl.textContent = "—";
-  gdeltSummaryEl.textContent = "—";
+  googleNewsQueryEl.textContent = "—";
+  googleNewsSummaryEl.textContent = "—";
+  newsQueryLabelEl.textContent = mode === "cloud" ? "Google Search queries" : "Google News query";
+  newsSummaryLabelEl.textContent = mode === "cloud" ? "Google Search grounding" : "Google News cross-validation";
   setLLMAssessment(null);
   setDebugTrace("");
 }
@@ -95,8 +99,10 @@ export function renderVerification(payload) {
     reproducibility: payload.reproducibility_summary || ""
   });
   renderEvidence(payload.evidence);
-  gdeltQueryEl.textContent = payload.gdelt_query || "—";
-  gdeltSummaryEl.textContent = payload.gdelt_summary || "—";
+  newsQueryLabelEl.textContent = mode === "cloud" ? "Google Search queries" : "Google News query";
+  newsSummaryLabelEl.textContent = mode === "cloud" ? "Google Search grounding" : "Google News cross-validation";
+  googleNewsQueryEl.textContent = payload.news_query || "—";
+  googleNewsSummaryEl.textContent = payload.news_summary || "—";
   setLLMAssessment(payload.llm_assessment || null);
   setDebugTrace(payload.debug_trace || payload.llm_assessment?.debug_trace || "");
 }

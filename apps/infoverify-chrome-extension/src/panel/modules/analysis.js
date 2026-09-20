@@ -1,6 +1,6 @@
 // ---------- Local AI orchestration and scoring pipeline ----------
 import { DEBUG_PREFIX } from "./constants.js";
-import { gdeltSummaryEl, thinkingTextEl } from "./dom.js";
+import { googleNewsSummaryEl, thinkingTextEl } from "./dom.js";
 import { reportError, truncateForDebug, buildDebugTrace, setStatus } from "./logging.js";
 import { sanitizeModelText } from "./utils.js";
 import {
@@ -11,7 +11,7 @@ import {
   fallbackLanguageText
 } from "./language.js";
 import { createLanguageModelSession } from "./model.js";
-import { fetchGdeltBundle, extractAnchorDate, summarizeGdeltBundle } from "./gdelt.js";
+import { fetchGoogleNewsBundle, extractAnchorDate, summarizeGoogleNewsBundle } from "./google_news.js";
 import { lookupMbfcEntry } from "./mbfc.js";
 import { buildLocalPrompt } from "./prompt.js";
 import { buildDeterministicLocalAssessment, buildDeterministicRuleScores } from "./scoring.js";
@@ -43,12 +43,12 @@ export async function runLocalAnalysis(input, signal) {
 
   // Create the model session up front. If "Analyze" was clicked before the
   // model finished downloading, this also drives the (gesture-authorized)
-  // download — doing it before the slower translation and GDELT steps keeps the
+  // download — doing it before the slower translation and Google News steps keeps the
   // click's user gesture valid. The dedicated "Download local AI" button is the
   // primary way to perform the one-time download.
   //
   // A failure here must NOT discard the run: the three rule scores are derived
-  // from GDELT / MBFC / specificity, not from the AI verdict, so when the model
+  // from Google News / MBFC / specificity, not from the AI verdict, so when the model
   // is unavailable we still return rule-based scores (with a clear reason)
   // instead of an empty 0% result.
   let session = null;
@@ -69,33 +69,33 @@ export async function runLocalAnalysis(input, signal) {
 
   const preparedInput = await prepareEnglishAnalysisInput(input, signal);
 
-  gdeltSummaryEl.textContent = "Searching Google News...";
-  let gdeltBundle;
+  googleNewsSummaryEl.textContent = "Searching Google News...";
+  let newsBundle;
   try {
-    gdeltBundle = await fetchGdeltBundle(preparedInput, signal, outputLanguage);
+    newsBundle = await fetchGoogleNewsBundle(preparedInput, signal, outputLanguage);
   } catch (err) {
-    reportError("fetchGdeltBundle", err, {
+    reportError("fetchGoogleNewsBundle", err, {
       input: { url: preparedInput.url, title: preparedInput.title },
       outputLanguage
     });
     const anchorDate = extractAnchorDate(preparedInput);
     const errorMessage = `Google News fetch failed: ${String(err?.message || err)}`;
-    gdeltBundle = {
+    newsBundle = {
       query: "",
       items: [],
       anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : "",
       errorMessage,
       rawPreview: "",
-      summary: summarizeGdeltBundle("", [], errorMessage, anchorDate, outputLanguage)
+      summary: summarizeGoogleNewsBundle("", [], errorMessage, anchorDate, outputLanguage)
     };
   }
-  gdeltSummaryEl.textContent = gdeltBundle.summary || "—";
+  googleNewsSummaryEl.textContent = newsBundle.summary || "—";
   const mbfcEntry = await lookupMbfcEntry(preparedInput.url || "");
 
   // AI session unavailable: keep the rule-based scores and surface the reason.
   if (!session) {
     const reason = String(sessionError?.message || "Local AI is unavailable");
-    const fallback = buildDeterministicLocalAssessment(preparedInput, gdeltBundle, mbfcEntry, "", outputLanguage);
+    const fallback = buildDeterministicLocalAssessment(preparedInput, newsBundle, mbfcEntry, "", outputLanguage);
     fallback.summary = reason;
     fallback.rationale = reason;
     fallback.missing = [reason];
@@ -107,15 +107,15 @@ export async function runLocalAnalysis(input, signal) {
       raw: "",
       parsed: null,
       error: reason,
-      gdeltSummary: gdeltBundle.summary,
-      gdeltRawPreview: gdeltBundle.rawPreview,
+      newsSummary: newsBundle.summary,
+      newsRawPreview: newsBundle.rawPreview,
       mbfc: mbfcEntry
     });
     console.error(`${DEBUG_PREFIX} local AI session unavailable`, { error: reason });
     return fallback;
   }
 
-  const prompt = buildLocalPrompt(preparedInput, gdeltBundle, mbfcEntry, modelOutputLanguage, outputLanguage);
+  const prompt = buildLocalPrompt(preparedInput, newsBundle, mbfcEntry, modelOutputLanguage, outputLanguage);
   let raw = "";
   try {
     raw = await promptLocalAssessment(session, prompt, signal);
@@ -134,7 +134,7 @@ export async function runLocalAnalysis(input, signal) {
   });
   const parsed = parseAssessmentJson(raw);
   if (!parsed) {
-    const fallback = buildDeterministicLocalAssessment(preparedInput, gdeltBundle, mbfcEntry, raw, outputLanguage);
+    const fallback = buildDeterministicLocalAssessment(preparedInput, newsBundle, mbfcEntry, raw, outputLanguage);
     fallback.debug_trace = buildDebugTrace({
       stage: "local-parse-fallback",
       outputLanguage,
@@ -143,8 +143,8 @@ export async function runLocalAnalysis(input, signal) {
       raw,
       parsed: null,
       error: "raw output did not parse as JSON",
-      gdeltSummary: gdeltBundle.summary,
-      gdeltRawPreview: gdeltBundle.rawPreview,
+      newsSummary: newsBundle.summary,
+      newsRawPreview: newsBundle.rawPreview,
       mbfc: mbfcEntry,
       analysisLanguage: preparedInput.analysisLanguage,
       analysisLanguageConfidence: preparedInput.analysisLanguageConfidence,
@@ -161,10 +161,10 @@ export async function runLocalAnalysis(input, signal) {
 
   let ruleScores = normalizeRuleScores(parsed.rule_scores);
   // Some local-model responses parse as JSON but omit (or zero out) rule_scores.
-  // The scores reflect GDELT/MBFC/specificity, so fall back to the deterministic
+  // The scores reflect Google News/MBFC/specificity, so fall back to the deterministic
   // values rather than showing 0% across the board.
   if (ruleScores.reproducibility === 0 && ruleScores.cross_validation === 0 && ruleScores.detail_richness === 0) {
-    ruleScores = buildDeterministicRuleScores(preparedInput, gdeltBundle, mbfcEntry);
+    ruleScores = buildDeterministicRuleScores(preparedInput, newsBundle, mbfcEntry);
   }
   const overallScore = normalizeConfidence(parsed.overall_score ?? averageRuleScores(ruleScores));
   const result = {
@@ -174,13 +174,13 @@ export async function runLocalAnalysis(input, signal) {
     rationale: sanitizeModelText(parsed.rationale || parsed.summary || fallbackLanguageText(outputLanguage, "analysisDone")),
     rule_scores: ruleScores,
     rule_notes: normalizeRuleNotes(parsed.rule_notes),
-    evidence: mergeEvidenceLists(normalizeEvidence(parsed.evidence, preparedInput), gdeltBundle.items, preparedInput),
+    evidence: mergeEvidenceLists(normalizeEvidence(parsed.evidence, preparedInput), newsBundle.items, preparedInput),
     conflicts: normalizeList(parsed.conflicts),
     missing: normalizeList(parsed.missing),
-    gdelt_query: gdeltBundle.query || "",
-    gdelt_summary: gdeltBundle.summary,
-    reproducibility_summary: buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage),
-    cross_validation_summary: buildCrossValidationSummary(gdeltBundle, outputLanguage),
+    news_query: newsBundle.query || "",
+    news_summary: newsBundle.summary,
+    reproducibility_summary: buildReproducibilitySummary(newsBundle, mbfcEntry, outputLanguage),
+    cross_validation_summary: buildCrossValidationSummary(newsBundle, outputLanguage),
     specificity_summary: buildSpecificitySummary(preparedInput, outputLanguage)
   };
 

@@ -127,8 +127,8 @@ async function callGemini({ apiKey, model }, prompt, signal) {
     .map((web) => ({
       title: String(web.title || web.uri || "Source").trim(),
       url: String(web.uri || "").trim(),
-      // GDELT-style item fields so the deterministic scorer can reuse them.
-      domain: normalizeHostname(web.title || web.uri || ""),
+      // Common evidence fields let the deterministic scorer reuse grounded sources.
+      domain: normalizeHostname(web.uri || web.title || ""),
       quote: "",
       retrieved_at: "",
       source_type: "web"
@@ -191,8 +191,8 @@ export async function runCloudAnalysis(input, signal) {
 
   const searchSummary = buildCloudSearchSummary(sources, searchQueries);
   const base = {
-    gdelt_query: searchQueries.join(", "),
-    gdelt_summary: searchSummary,
+    news_query: searchQueries.join(", "),
+    news_summary: searchSummary,
     reproducibility_summary: buildCloudReproducibilitySummary(mbfcEntry),
     cross_validation_summary: buildCloudCrossValidationSummary(sources),
     specificity_summary: buildSpecificitySummary(input, outputLanguage)

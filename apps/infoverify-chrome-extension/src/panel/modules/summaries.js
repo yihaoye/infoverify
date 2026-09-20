@@ -16,7 +16,7 @@ const REPRODUCIBILITY_COPY = {
   es: {
     mbfc: "MBFC",
     noMatch: "no hay coincidencia estática o el dominio aún no se ha empaquetado.",
-    timeline: "Cronología de GDELT",
+    timeline: "Cronología de Google News",
     first: "primera",
     recent: "reciente",
     distinct: "dominios distintos",
@@ -26,7 +26,7 @@ const REPRODUCIBILITY_COPY = {
   ja: {
     mbfc: "MBFC",
     noMatch: "静的な一致がないか、まだそのドメインがパッケージ化されていません。",
-    timeline: "GDELT タイムライン",
+    timeline: "Google News タイムライン",
     first: "最初",
     recent: "最近",
     distinct: "異なるドメイン",
@@ -36,7 +36,7 @@ const REPRODUCIBILITY_COPY = {
   zh: {
     mbfc: "MBFC",
     noMatch: "没有静态匹配，或者该域名尚未打包。",
-    timeline: "GDELT 时间线",
+    timeline: "Google News 时间线",
     first: "首次",
     recent: "最近",
     distinct: "个独立域名",
@@ -55,8 +55,8 @@ const CROSS_VALIDATION_COPY = {
     cue: "Assessment cue: cross-validation is stronger when multiple independent publisher domains report the claim over time."
   },
   es: {
-    empty: "Validación cruzada de GDELT: no hay eventos de noticias utilizables, por lo que la corroboración independiente es débil.",
-    prefix: "Validación cruzada de GDELT",
+    empty: "Validación cruzada de Google News: no hay resultados utilizables, por lo que la corroboración independiente es débil.",
+    prefix: "Validación cruzada de Google News",
     hitsLabel: "coincidencias",
     domainsLabel: "dominios distintos",
     countriesLabel: "países de origen",
@@ -65,8 +65,8 @@ const CROSS_VALIDATION_COPY = {
     cue: "Pista de evaluación: la validación cruzada es más fuerte cuando coinciden múltiples dominios, múltiples países y un tono consistente."
   },
   ja: {
-    empty: "GDELT のクロス検証: 利用できるニュースイベントがなく、独立した裏付けは弱いです。",
-    prefix: "GDELT のクロス検証",
+    empty: "Google News のクロス検証: 利用できるニュース結果がなく、独立した裏付けは弱いです。",
+    prefix: "Google News のクロス検証",
     hitsLabel: "件のヒット",
     domainsLabel: "異なるドメイン",
     countriesLabel: "発信国",
@@ -75,8 +75,8 @@ const CROSS_VALIDATION_COPY = {
     cue: "評価の目安: 複数のドメイン、複数の国、そして一貫したトーンがそろうほどクロス検証は強くなります。"
   },
   zh: {
-    empty: "GDELT 交叉验证：没有可用新闻事件，因此独立印证较弱。",
-    prefix: "GDELT 交叉验证",
+    empty: "Google News 交叉验证：没有可用新闻结果，因此独立印证较弱。",
+    prefix: "Google News 交叉验证",
     hitsLabel: "条命中",
     domainsLabel: "个独立域名",
     countriesLabel: "个来源国家",
@@ -113,7 +113,7 @@ const SPECIFICITY_COPY = {
   }
 };
 
-export function buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage = "en") {
+export function buildReproducibilitySummary(newsBundle, mbfcEntry, outputLanguage = "en") {
   const copy = REPRODUCIBILITY_COPY[resolveOutputLanguage(outputLanguage)] || REPRODUCIBILITY_COPY.en;
   const lines = [];
   if (mbfcEntry) {
@@ -122,10 +122,10 @@ export function buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLangua
     lines.push(`${copy.mbfc}: ${copy.noMatch}`);
   }
 
-  if (gdeltBundle?.items?.length) {
-    const firstDate = gdeltBundle.items[gdeltBundle.items.length - 1]?.retrieved_at || "";
-    const lastDate = gdeltBundle.items[0]?.retrieved_at || "";
-    const domains = countDistinctValues(gdeltBundle.items.map((item) => item.domain).filter(Boolean));
+  if (newsBundle?.items?.length) {
+    const firstDate = newsBundle.items[newsBundle.items.length - 1]?.retrieved_at || "";
+    const lastDate = newsBundle.items[0]?.retrieved_at || "";
+    const domains = countDistinctValues(newsBundle.items.map((item) => item.domain).filter(Boolean));
     lines.push(`${copy.timeline}: ${copy.first} ${formatDateOnly(firstDate)} · ${copy.recent} ${formatDateOnly(lastDate)} · ${copy.distinct} ${domains}`);
   } else {
     lines.push(`${copy.timeline}: ${copy.noData}`);
@@ -135,9 +135,9 @@ export function buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLangua
   return lines.join("\n");
 }
 
-export function buildCrossValidationSummary(gdeltBundle, outputLanguage = "en") {
+export function buildCrossValidationSummary(newsBundle, outputLanguage = "en") {
   const copy = CROSS_VALIDATION_COPY[resolveOutputLanguage(outputLanguage)] || CROSS_VALIDATION_COPY.en;
-  const items = Array.isArray(gdeltBundle?.items) ? gdeltBundle.items : [];
+  const items = Array.isArray(newsBundle?.items) ? newsBundle.items : [];
   if (items.length === 0) {
     return copy.empty;
   }

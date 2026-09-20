@@ -82,7 +82,7 @@ export async function startVerification(verification) {
   await chrome.storage.session.set({ currentVerification: state.currentVerification });
 
   setLoading(true, mode);
-  resetResultsView();
+  resetResultsView(mode);
 
   try {
     const payload = mode === "cloud"

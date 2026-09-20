@@ -39,13 +39,30 @@ export function clamp(v, lo, hi) {
 
 export function formatError(err) {
   const message = String(err?.message || err || "Unknown error");
-  return `Local AI unavailable: ${message}`;
+  return `Analysis unavailable: ${message}`;
 }
 
 export function sanitizeModelText(value) {
-  return String(value || "")
+  const text = String(value || "")
     .replace(/^﻿/, "")
     .trim();
+  if (!text) return "";
+
+  const fenced = text.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  const candidate = fenced ? fenced[1].trim() : text;
+  try {
+    const parsed = JSON.parse(candidate);
+    if (Array.isArray(parsed)) {
+      return parsed.map((item) => sanitizeModelText(item)).filter(Boolean).join(" ");
+    }
+    if (parsed && typeof parsed === "object") {
+      return sanitizeModelText(parsed.summary || parsed.rationale || parsed.message || parsed.text || "");
+    }
+    if (typeof parsed === "string") return parsed.trim();
+  } catch {
+    // Plain text is the expected UI format.
+  }
+  return text;
 }
 
 export async function safeReadText(resp) {
@@ -54,26 +71,4 @@ export async function safeReadText(resp) {
   } catch {
     return "";
   }
-}
-
-export function sleep(ms, signal) {
-  return new Promise((resolve, reject) => {
-    const timer = window.setTimeout(() => {
-      signal?.removeEventListener?.("abort", onAbort);
-      resolve();
-    }, ms);
-
-    function onAbort() {
-      window.clearTimeout(timer);
-      reject(new DOMException("Aborted", "AbortError"));
-    }
-
-    if (signal?.aborted) {
-      window.clearTimeout(timer);
-      reject(new DOMException("Aborted", "AbortError"));
-      return;
-    }
-
-    signal?.addEventListener?.("abort", onAbort, { once: true });
-  });
 }

@@ -1,5 +1,5 @@
 // ---------- Normalization of model output, verdicts, and parsed payloads ----------
-import { clamp } from "./utils.js";
+import { clamp, sanitizeModelText } from "./utils.js";
 import { buildFallbackEvidence } from "./evidence.js";
 import { buildDebugTrace } from "./logging.js";
 
@@ -7,8 +7,8 @@ export function normalizeResult(payload, mode, input) {
   const result = {
     verdict: normalizeVerdict(payload?.verdict),
     confidence: normalizeConfidence(payload?.confidence),
-    summary: String(payload?.summary || payload?.rationale || "—"),
-    rationale: String(payload?.rationale || payload?.summary || "—"),
+    summary: sanitizeModelText(payload?.summary || payload?.rationale || "—") || "—",
+    rationale: sanitizeModelText(payload?.rationale || payload?.summary || "—") || "—",
     rule_scores: normalizeRuleScores(payload?.rule_scores),
     rule_notes: normalizeRuleNotes(payload?.rule_notes),
     evidence: normalizeEvidence(payload?.evidence, input),
@@ -17,8 +17,8 @@ export function normalizeResult(payload, mode, input) {
     llm_assessment: payload?.llm_assessment || null,
     debug_trace: String(payload?.debug_trace || ""),
     mode,
-    gdelt_query: String(payload?.gdelt_query || ""),
-    gdelt_summary: String(payload?.gdelt_summary || ""),
+    news_query: String(payload?.news_query || ""),
+    news_summary: String(payload?.news_summary || ""),
     reproducibility_summary: String(payload?.reproducibility_summary || ""),
     cross_validation_summary: String(payload?.cross_validation_summary || ""),
     specificity_summary: String(payload?.specificity_summary || "")
@@ -67,7 +67,7 @@ export function errorResult({ input, mode, message }) {
       parsed: null
     }),
     mode,
-    gdelt_summary: ""
+    news_summary: ""
   };
 }
 
@@ -83,9 +83,9 @@ export function normalizeRuleScores(ruleScores) {
 export function normalizeRuleNotes(ruleNotes) {
   if (!ruleNotes || typeof ruleNotes !== "object") return null;
   return {
-    reproducibility: String(ruleNotes.reproducibility || ruleNotes.repro || "").trim(),
-    cross_validation: String(ruleNotes.cross_validation || ruleNotes.cross || "").trim(),
-    detail_richness: String(ruleNotes.detail_richness || ruleNotes.detail || "").trim()
+    reproducibility: sanitizeModelText(ruleNotes.reproducibility || ruleNotes.repro || ""),
+    cross_validation: sanitizeModelText(ruleNotes.cross_validation || ruleNotes.cross || ""),
+    detail_richness: sanitizeModelText(ruleNotes.detail_richness || ruleNotes.detail || "")
   };
 }
 

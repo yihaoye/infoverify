@@ -33,8 +33,8 @@ export function buildDebugTrace(fields) {
       rawPreview: truncateForDebug(fields.raw, 3500),
       parsedPreview: fields.parsed || null,
       error: fields.error || "",
-      gdeltSummary: truncateForDebug(fields.gdeltSummary, 1200),
-      gdeltRawPreview: truncateForDebug(fields.gdeltRawPreview, 1200),
+      newsSummary: truncateForDebug(fields.newsSummary, 1200),
+      newsRawPreview: truncateForDebug(fields.newsRawPreview, 1200),
       mbfc: fields.mbfc || null
     },
     null,

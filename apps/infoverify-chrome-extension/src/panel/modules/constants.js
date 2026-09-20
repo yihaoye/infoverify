@@ -1,10 +1,8 @@
 // ---------- Shared constants and localized fallback copy ----------
 export const DEBUG_PREFIX = "[InfoVerify]";
 export const minLoadingMs = 700;
-// Space requests and cache results to avoid repeated Google News RSS fetches.
-export const gdeltMinIntervalMs = 1500;
-export const gdeltCacheTtlMs = 15 * 60 * 1000;
-export const gdeltCooldownMs = 2 * 60 * 1000;
+// Avoid repeated searches for the same claim during a panel session.
+export const googleNewsCacheTtlMs = 15 * 60 * 1000;
 
 // ---------- Cloud AI (BYOK) defaults ----------
 // Only Google Gemini is supported for now. The model is user-editable in Options.

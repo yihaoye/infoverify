@@ -9,8 +9,8 @@ import {
   buildSpecificitySummary
 } from "./summaries.js";
 
-export function buildDeterministicLocalAssessment(input, gdeltBundle, mbfcEntry, raw, outputLanguage) {
-  const rule_scores = buildDeterministicRuleScores(input, gdeltBundle, mbfcEntry);
+export function buildDeterministicLocalAssessment(input, newsBundle, mbfcEntry, raw, outputLanguage) {
+  const rule_scores = buildDeterministicRuleScores(input, newsBundle, mbfcEntry);
   const confidence = normalizeConfidence(averageRuleScores(rule_scores));
   const rationale = sanitizeModelText(raw) || fallbackLanguageText(outputLanguage, "noOutput");
   return {
@@ -20,25 +20,25 @@ export function buildDeterministicLocalAssessment(input, gdeltBundle, mbfcEntry,
     rationale,
     rule_scores,
     rule_notes: {
-      reproducibility: buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage),
-      cross_validation: buildCrossValidationSummary(gdeltBundle, outputLanguage),
+      reproducibility: buildReproducibilitySummary(newsBundle, mbfcEntry, outputLanguage),
+      cross_validation: buildCrossValidationSummary(newsBundle, outputLanguage),
       detail_richness: buildSpecificitySummary(input, outputLanguage)
     },
-    evidence: mergeEvidenceLists(buildFallbackEvidence(input), gdeltBundle.items, input),
+    evidence: mergeEvidenceLists(buildFallbackEvidence(input), newsBundle.items, input),
     conflicts: [],
     missing: raw ? [fallbackLanguageText(outputLanguage, "jsonFallback")] : [fallbackLanguageText(outputLanguage, "noOutput")],
-    gdelt_query: gdeltBundle.query || "",
-    gdelt_summary: gdeltBundle.summary,
-    reproducibility_summary: buildReproducibilitySummary(gdeltBundle, mbfcEntry, outputLanguage),
-    cross_validation_summary: buildCrossValidationSummary(gdeltBundle, outputLanguage),
+    news_query: newsBundle.query || "",
+    news_summary: newsBundle.summary,
+    reproducibility_summary: buildReproducibilitySummary(newsBundle, mbfcEntry, outputLanguage),
+    cross_validation_summary: buildCrossValidationSummary(newsBundle, outputLanguage),
     specificity_summary: buildSpecificitySummary(input, outputLanguage)
   };
 }
 
-export function buildDeterministicRuleScores(input, gdeltBundle, mbfcEntry) {
+export function buildDeterministicRuleScores(input, newsBundle, mbfcEntry) {
   return {
-    reproducibility: scoreReproducibility(gdeltBundle, mbfcEntry),
-    cross_validation: scoreCrossValidation(gdeltBundle),
+    reproducibility: scoreReproducibility(newsBundle, mbfcEntry),
+    cross_validation: scoreCrossValidation(newsBundle),
     detail_richness: scoreSpecificity(input)
   };
 }
@@ -54,8 +54,8 @@ export function scoreSpecificity(input) {
   return clamp(score, 0, 1);
 }
 
-export function scoreCrossValidation(gdeltBundle) {
-  const items = Array.isArray(gdeltBundle?.items) ? gdeltBundle.items : [];
+export function scoreCrossValidation(newsBundle) {
+  const items = Array.isArray(newsBundle?.items) ? newsBundle.items : [];
   if (items.length === 0) return 0.12;
 
   const domains = countDistinctValues(items.map((item) => item.domain).filter(Boolean));
@@ -67,8 +67,8 @@ export function scoreCrossValidation(gdeltBundle) {
   return clamp(score, 0, 1);
 }
 
-export function scoreReproducibility(gdeltBundle, mbfcEntry) {
-  const items = Array.isArray(gdeltBundle?.items) ? gdeltBundle.items : [];
+export function scoreReproducibility(newsBundle, mbfcEntry) {
+  const items = Array.isArray(newsBundle?.items) ? newsBundle.items : [];
   const domains = countDistinctValues(items.map((item) => item.domain).filter(Boolean));
   const dates = countDistinctValues(items.map((item) => formatDateOnly(item.retrieved_at)).filter((value) => value && value !== UNKNOWN_DATE));
   const hasMbfc = Boolean(mbfcEntry);
