@@ -1,5 +1,5 @@
 // ---------- Deterministic scoring used by both the model and fallback paths ----------
-import { clamp, countDistinctValues, formatDateOnly, getAnalysisText, sanitizeModelText, UNKNOWN_DATE } from "./utils.js";
+import { clamp, countDistinctValues, formatDateOnly, getAnalysisText, UNKNOWN_DATE } from "./utils.js";
 import { fallbackLanguageText } from "./language.js";
 import { normalizeConfidence, normalizeVerdict, verdictFromScore, averageRuleScores } from "./normalize.js";
 import { mergeEvidenceLists, buildFallbackEvidence } from "./evidence.js";
@@ -12,7 +12,9 @@ import {
 export function buildDeterministicLocalAssessment(input, newsBundle, mbfcEntry, raw, outputLanguage) {
   const rule_scores = buildDeterministicRuleScores(input, newsBundle, mbfcEntry);
   const confidence = normalizeConfidence(averageRuleScores(rule_scores));
-  const rationale = sanitizeModelText(raw) || fallbackLanguageText(outputLanguage, "noOutput");
+  const rationale = raw
+    ? fallbackLanguageText(outputLanguage, "jsonFallback")
+    : fallbackLanguageText(outputLanguage, "noOutput");
   return {
     verdict: normalizeVerdict(verdictFromScore(confidence)),
     confidence,
