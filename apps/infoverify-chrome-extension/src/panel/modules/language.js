@@ -112,8 +112,7 @@ export async function translateText(value, sourceLanguage, targetLanguage, signa
 export async function prepareEnglishAnalysisInput(input, signal) {
   const selectionText = String(input?.selectionText || "");
   const title = String(input?.title || "");
-  const pageText = String(input?.pageText || "");
-  const sampleText = [selectionText, title, pageText].filter(Boolean).join(" ").slice(0, 2400);
+  const sampleText = [selectionText, title].filter(Boolean).join(" ").slice(0, 2400);
 
   const detected = await detectLanguage(sampleText, signal);
   const detectedLanguage = String(detected.language || "unknown").toLowerCase();
@@ -125,29 +124,27 @@ export async function prepareEnglishAnalysisInput(input, signal) {
       ...input,
       analysisLanguage: detectedLanguage,
       analysisLanguageConfidence: detected.confidence,
-      analysisText: String(input?.analysisText || input?.pageText || input?.selectionText || ""),
+      analysisText: String(input?.analysisText || input?.selectionText || ""),
       sourceSelectionText: selectionText,
       sourceTitle: title,
-      sourcePageText: pageText
+      sourcePageText: ""
     };
   }
 
   const translatedSelectionText = await translateText(selectionText, detectedLanguage, "en", signal);
   const translatedTitle = await translateText(title, detectedLanguage, "en", signal);
-  const translatedPageText = await translateText(pageText, detectedLanguage, "en", signal);
-  const translatedAnalysisText = String(translatedPageText || translatedSelectionText || translatedTitle || input?.analysisText || input?.pageText || input?.selectionText || "");
+  const translatedAnalysisText = String(translatedSelectionText || translatedTitle || input?.analysisText || input?.selectionText || "");
 
   return {
     ...input,
     selectionText: translatedSelectionText || selectionText,
     title: translatedTitle || title,
-    pageText: translatedPageText || pageText,
     analysisText: translatedAnalysisText,
     analysisLanguage: detectedLanguage,
     analysisLanguageConfidence: detected.confidence,
     sourceSelectionText: selectionText,
     sourceTitle: title,
-    sourcePageText: pageText,
+    sourcePageText: "",
     inputWasTranslated: true
   };
 }

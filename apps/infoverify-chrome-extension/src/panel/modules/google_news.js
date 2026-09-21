@@ -225,7 +225,7 @@ export function summarizeGoogleNewsBundle(query, items, errorMessage, anchorDate
 }
 
 export function extractAnchorDate(input) {
-  const text = [input?.selectionText, input?.title, input?.pageText].filter(Boolean).join(" ");
+  const text = [input?.selectionText, input?.title].filter(Boolean).join(" ");
   const patterns = [
     /(\d{4})[/-](\d{1,2})[/-](\d{1,2})/,
     /(\d{4})年(\d{1,2})月(\d{1,2})日/,
@@ -290,14 +290,10 @@ export async function buildGoogleNewsQueries(input, signal) {
 }
 
 export async function buildPromptDrivenGoogleNewsQuery(input, signal) {
-  // The user's selection IS the claim to verify, so it leads. We avoid repeating
-  // the same paragraph across analysisText/selectionText and avoid dumping the
-  // full page text when a selection exists — both dilute the model's attention
-  // and let it latch onto an entity-dense but secondary sentence instead of the
-  // main claim.
+  // The user's selection is the claim to verify. Page text is intentionally not
+  // captured or used, so the query stays focused on the chosen statement.
   const claim = String(input?.selectionText || "").trim()
-    || String(input?.analysisText || "").trim()
-    || String(input?.pageText || "").trim();
+    || String(input?.analysisText || "").trim();
   const title = String(input?.title || "").trim();
   const text = [claim, title]
     .filter(Boolean)

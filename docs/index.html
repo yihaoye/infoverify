@@ -33,29 +33,28 @@
     <section class="card">
       <h1>InfoVerify Privacy Policy</h1>
       <div class="meta">Last updated: September 21, 2026</div>
-      <p>InfoVerify is a Chrome extension that analyzes the text you select or the current page URL you choose to verify.</p>
-      <p>InfoVerify does not automatically read page content or run on every website. It accesses the active page only after you invoke the <strong>Fact Check the Info</strong> context-menu action.</p>
+      <p>InfoVerify is a Chrome extension that analyzes only text you explicitly select.</p>
+      <p>InfoVerify does not automatically read page content or run on every website. Its verification action appears only after you select text and invoke the <strong>Fact Check the Info</strong> context-menu action.</p>
 
       <h2>Data We Process</h2>
       <p>When you use the extension, we may process:</p>
       <ul>
         <li>the text you select on a page</li>
-        <li>the current page URL</li>
-        <li>page title and page text needed for local analysis</li>
+        <li>the current page URL and title as context for the selected text</li>
         <li>optional debugging information you copy manually</li>
       </ul>
 
       <h2>Where Data Is Processed</h2>
       <ul>
         <li>Local AI features run in your browser using Chrome built-in AI APIs when available.</li>
-        <li>Google News RSS access is requested only when you first use the verification action. If you grant it, a short search query derived from the text, title, and page content you actively choose to analyze may be sent to Google. The RSS request does not send Google account cookies or a page referrer.</li>
+        <li>Google News RSS access is requested only when you first use the verification action. If you grant it, a short search query derived from the selected text and page title may be sent to Google. The RSS request does not send Google account cookies or a page referrer.</li>
         <li>We do not require an account for the extension itself.</li>
       </ul>
 
       <h2>Optional Cloud AI</h2>
       <p>Cloud AI is off by default. It runs only when you add your own Google Gemini API key in Settings and click the Cloud AI action. It asks separately for permission to connect to Gemini.</p>
       <ul>
-        <li>The selected text and current page content are sent to Google's Gemini API using your key.</li>
+        <li>The selected text plus the page URL and title are sent to Google's Gemini API using your key.</li>
         <li>Gemini may use Google Search grounding to find independent sources for cross-validation.</li>
         <li>Your Gemini API key is stored only in local extension storage on this device and is never synced.</li>
         <li>If you do not add a key or use Cloud AI, the extension does not send your analysis content to Gemini.</li>

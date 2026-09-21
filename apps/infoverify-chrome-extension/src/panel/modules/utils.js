@@ -3,8 +3,7 @@ export function getAnalysisText(input) {
   const analysisText = String(input?.analysisText || "").trim();
   if (analysisText) return analysisText;
   const selection = String(input?.selectionText || "").trim();
-  if (selection) return selection;
-  return String(input?.pageText || "").trim();
+  return selection;
 }
 
 export function countDistinctValues(values) {

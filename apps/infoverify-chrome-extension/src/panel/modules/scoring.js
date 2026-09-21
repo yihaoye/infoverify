@@ -46,7 +46,7 @@ export function buildDeterministicRuleScores(input, newsBundle, mbfcEntry) {
 }
 
 export function scoreSpecificity(input) {
-  const text = getAnalysisText(input) || `${input?.selectionText || ""} ${input?.pageText || ""}`;
+  const text = getAnalysisText(input) || String(input?.selectionText || "");
   const normalized = String(text || "");
   const words = normalized.split(/\s+/).filter(Boolean).length;
   const numbers = (normalized.match(/\b\d+(?:\.\d+)?%?\b/g) || []).length;

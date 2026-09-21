@@ -46,7 +46,7 @@ export function errorResult({ input, mode, message }) {
       {
         title: input.title || "Current page",
         url: input.url || "",
-        quote: input.selectionText || input.pageText?.slice(0, 160) || "",
+        quote: input.selectionText || "",
         retrieved_at: input.capturedAt || new Date().toISOString(),
         source_type: "page"
       }

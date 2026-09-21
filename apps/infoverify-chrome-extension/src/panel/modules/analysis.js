@@ -18,7 +18,6 @@ import { buildDeterministicLocalAssessment, buildDeterministicRuleScores } from 
 import {
   normalizeRuleScores,
   normalizeRuleNotes,
-  normalizeConfidence,
   normalizeVerdict,
   normalizeEvidence,
   normalizeList,
@@ -159,14 +158,9 @@ export async function runLocalAnalysis(input, signal) {
     return fallback;
   }
 
-  let ruleScores = normalizeRuleScores(parsed.rule_scores);
-  // Some local-model responses parse as JSON but omit (or zero out) rule_scores.
-  // The scores reflect Google News/MBFC/specificity, so fall back to the deterministic
-  // values rather than showing 0% across the board.
-  if (ruleScores.reproducibility === 0 && ruleScores.cross_validation === 0 && ruleScores.detail_richness === 0) {
-    ruleScores = buildDeterministicRuleScores(preparedInput, newsBundle, mbfcEntry);
-  }
-  const overallScore = normalizeConfidence(parsed.overall_score ?? averageRuleScores(ruleScores));
+  const deterministicRuleScores = buildDeterministicRuleScores(preparedInput, newsBundle, mbfcEntry);
+  const ruleScores = mergeLocalRuleScores(parsed.rule_scores, deterministicRuleScores);
+  const overallScore = averageRuleScores(ruleScores);
   const result = {
     verdict: normalizeVerdict(parsed.verdict || verdictFromScore(overallScore)),
     confidence: overallScore,
@@ -195,4 +189,17 @@ export async function runLocalAnalysis(input, signal) {
     stack: ""
   });
   return localizedResult;
+}
+
+function mergeLocalRuleScores(modelRuleScores, deterministicRuleScores) {
+  const modelScores = normalizeRuleScores(modelRuleScores);
+  const mergedScores = { ...modelScores };
+
+  for (const ruleName of ["reproducibility", "cross_validation", "detail_richness"]) {
+    if (mergedScores[ruleName] === 0 && deterministicRuleScores[ruleName] > 0) {
+      mergedScores[ruleName] = deterministicRuleScores[ruleName];
+    }
+  }
+
+  return mergedScores;
 }

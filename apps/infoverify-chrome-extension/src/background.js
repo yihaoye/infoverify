@@ -5,7 +5,7 @@ chrome.runtime.onInstalled.addListener(async () => {
   chrome.contextMenus.create({
     id: MENU_ID_VERIFY,
     title: "Fact Check the Info",
-    contexts: ["selection", "page"]
+    contexts: ["selection"]
   });
 
   if (chrome.sidePanel?.setOptions) {
@@ -19,6 +19,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!tab?.id) return;
   if (info.menuItemId !== MENU_ID_VERIFY) return;
+  if (!info.selectionText?.trim()) return;
 
   // Both APIs require the context-menu user gesture. Invoke them synchronously
   // before awaiting either promise; awaiting the permission prompt first loses
@@ -32,7 +33,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const googleNewsPermissionGranted = await googleNewsPermission;
 
   const input = {
-    ...await captureInput(tab, info),
+    ...captureInput(tab, info),
     googleNewsPermissionGranted
   };
   const mode = "local";
@@ -61,47 +62,12 @@ function requestGoogleNewsPermission() {
   }
 }
 
-async function captureInput(tab, info) {
-  const fallback = {
+function captureInput(tab, info) {
+  return {
     selectionText: info.selectionText?.trim() || "",
     url: tab.url || "",
     title: tab.title || "",
-    pageText: "",
     capturedAt: new Date().toISOString()
-  };
-
-  try {
-    const context = await getPageContext(tab.id);
-    return normalizeInput(context, fallback);
-  } catch {
-    return fallback;
-  }
-}
-
-async function getPageContext(tabId) {
-  try {
-    return await chrome.tabs.sendMessage(tabId, { type: "GET_CONTEXT" });
-  } catch {
-    await chrome.scripting.executeScript({
-      target: { tabId },
-      files: ["src/content.js"]
-    });
-    return await chrome.tabs.sendMessage(tabId, { type: "GET_CONTEXT" });
-  }
-}
-
-function normalizeInput(context, fallback) {
-  const selectionText = context?.selectionText?.trim?.() || fallback.selectionText;
-  const url = context?.url?.trim?.() || fallback.url;
-  const title = context?.title?.trim?.() || fallback.title;
-  const pageText = context?.pageText?.trim?.() || fallback.pageText;
-
-  return {
-    selectionText,
-    url,
-    title,
-    pageText,
-    capturedAt: fallback.capturedAt
   };
 }
 

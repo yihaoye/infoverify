@@ -78,9 +78,8 @@ function buildCloudPrompt(input, analysisText, language) {
     "",
     `URL: ${input.url || ""}`,
     `Title: ${input.title || ""}`,
-    `Selection: ${input.selectionText || ""}`,
-    "Page text:",
-    analysisText || input.pageText || input.selectionText || ""
+    "Selected text to verify:",
+    analysisText || input.selectionText || ""
   ].join("\n");
 }
 

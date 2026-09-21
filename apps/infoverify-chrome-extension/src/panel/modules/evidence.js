@@ -4,7 +4,7 @@ export function buildFallbackEvidence(input) {
     {
       title: input.title || "Current page",
       url: input.url || "",
-      quote: input.selectionText || input.pageText?.slice(0, 180) || "",
+      quote: input.selectionText || "",
       retrieved_at: input.capturedAt || new Date().toISOString(),
       source_type: "page"
     }
