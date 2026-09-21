@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "InfoVerify",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Fact Check the Info by Local AI and Google News cross-validation in a side panel.",
   "minimum_chrome_version": "138",
   "permissions": [
@@ -11,7 +11,7 @@
     "activeTab",
     "scripting"
   ],
-  "host_permissions": [
+  "optional_host_permissions": [
     "https://news.google.com/*",
     "https://generativelanguage.googleapis.com/*"
   ],

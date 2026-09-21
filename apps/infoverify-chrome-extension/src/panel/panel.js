@@ -19,8 +19,20 @@ cloudModeButtonEl?.addEventListener("click", async () => {
     chrome.runtime.openOptionsPage?.();
     return;
   }
+
+  const cloudPermissionGranted = await requestCloudPermission();
+  if (!cloudPermissionGranted) {
+    setStatus("Cloud AI requires permission to connect to the Gemini API.");
+    return;
+  }
   void requestRun("cloud");
 });
+
+async function requestCloudPermission() {
+  const details = { origins: ["https://generativelanguage.googleapis.com/*"] };
+  if (await chrome.permissions.contains(details)) return true;
+  return await chrome.permissions.request(details);
+}
 
 // Reflects the local model's download state on the dedicated button: hidden when
 // the model is ready, disabled when unsupported, actionable when a download is

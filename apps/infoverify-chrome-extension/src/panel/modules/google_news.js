@@ -5,6 +5,19 @@ import { normalizeHostname } from "./mbfc.js";
 import { safeReadText, sanitizeModelText } from "./utils.js";
 
 export async function fetchGoogleNewsBundle(input, signal, outputLanguage = "en") {
+  if (!(await hasGoogleNewsPermission(input))) {
+    const errorMessage = "Google News access was not granted.";
+    const anchorDate = extractAnchorDate(input);
+    return {
+      query: "",
+      items: [],
+      anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : "",
+      errorMessage,
+      rawPreview: "",
+      summary: summarizeGoogleNewsBundle("", [], errorMessage, anchorDate, outputLanguage)
+    };
+  }
+
   const queries = await buildGoogleNewsQueries(input, signal);
   const anchorDate = extractAnchorDate(input);
   const query = queries[0] || "";
@@ -45,6 +58,11 @@ export async function fetchGoogleNewsBundle(input, signal, outputLanguage = "en"
     await setGoogleNewsCachedBundle(cacheKey, bundle);
   }
   return bundle;
+}
+
+async function hasGoogleNewsPermission(input) {
+  if (input?.googleNewsPermissionGranted) return true;
+  return await chrome.permissions.contains({ origins: ["https://news.google.com/*"] });
 }
 
 export function buildGoogleNewsCacheKey(input, query, anchorDate) {
@@ -88,7 +106,11 @@ export async function fetchGoogleNewsItems(query, signal) {
   endpoint.searchParams.set("gl", "US");
   endpoint.searchParams.set("ceid", "US:en");
 
-  const resp = await fetch(endpoint.toString(), { signal });
+  const resp = await fetch(endpoint.toString(), {
+    signal,
+    credentials: "omit",
+    referrerPolicy: "no-referrer"
+  });
   if (!resp.ok) {
     const text = await safeReadText(resp);
     const payloadPreview = text.slice(0, 600);

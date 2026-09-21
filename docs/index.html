@@ -48,12 +48,12 @@
       <h2>Where Data Is Processed</h2>
       <ul>
         <li>Local AI features run in your browser using Chrome built-in AI APIs when available.</li>
-        <li>Google News RSS requests may send a short search query derived from the text, title, and page content you actively choose to analyze to Google.</li>
+        <li>Google News RSS access is requested only when you first use the verification action. If you grant it, a short search query derived from the text, title, and page content you actively choose to analyze may be sent to Google. The RSS request does not send Google account cookies or a page referrer.</li>
         <li>We do not require an account for the extension itself.</li>
       </ul>
 
       <h2>Optional Cloud AI</h2>
-      <p>Cloud AI is off by default. It runs only when you add your own Google Gemini API key in Settings and click the Cloud AI action.</p>
+      <p>Cloud AI is off by default. It runs only when you add your own Google Gemini API key in Settings and click the Cloud AI action. It asks separately for permission to connect to Gemini.</p>
       <ul>
         <li>The selected text and current page content are sent to Google's Gemini API using your key.</li>
         <li>Gemini may use Google Search grounding to find independent sources for cross-validation.</li>

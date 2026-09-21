@@ -1,4 +1,5 @@
 const MENU_ID_VERIFY = "infoverify.verifySelection";
+const GOOGLE_NEWS_ORIGIN = "https://news.google.com/*";
 
 chrome.runtime.onInstalled.addListener(async () => {
   chrome.contextMenus.create({
@@ -19,15 +20,21 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!tab?.id) return;
   if (info.menuItemId !== MENU_ID_VERIFY) return;
 
-  try {
-    if (chrome.sidePanel?.open) {
-      await chrome.sidePanel.open({ tabId: tab.id });
-    }
-  } catch {
-    // Side panel may already be open.
-  }
+  // Both APIs require the context-menu user gesture. Invoke them synchronously
+  // before awaiting either promise; awaiting the permission prompt first loses
+  // the activation required to open the side panel.
+  const sidePanelOpen = chrome.sidePanel?.open
+    ? chrome.sidePanel.open({ tabId: tab.id }).catch(() => {})
+    : Promise.resolve();
+  const googleNewsPermission = requestGoogleNewsPermission();
 
-  const input = await captureInput(tab, info);
+  await sidePanelOpen;
+  const googleNewsPermissionGranted = await googleNewsPermission;
+
+  const input = {
+    ...await captureInput(tab, info),
+    googleNewsPermissionGranted
+  };
   const mode = "local";
   const runId = crypto.randomUUID();
 
@@ -45,6 +52,14 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     payload: verification
   });
 });
+
+function requestGoogleNewsPermission() {
+  try {
+    return chrome.permissions.request({ origins: [GOOGLE_NEWS_ORIGIN] }).catch(() => false);
+  } catch {
+    return Promise.resolve(false);
+  }
+}
 
 async function captureInput(tab, info) {
   const fallback = {
