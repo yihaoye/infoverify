@@ -1,8 +1,10 @@
 # InfoVerify Privacy Policy
 
-Last updated: 2026-09-20
+Last updated: 2026-09-21
 
 InfoVerify is a Chrome extension that analyzes the text you select or the current page URL you choose to verify.
+
+InfoVerify does not automatically read page content or run on every website. It accesses the active page only after you invoke the **Fact Check the Info** context-menu action.
 
 ## Data we process
 

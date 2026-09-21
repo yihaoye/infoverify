@@ -56,10 +56,22 @@ async function captureInput(tab, info) {
   };
 
   try {
-    const context = await chrome.tabs.sendMessage(tab.id, { type: "GET_CONTEXT" });
+    const context = await getPageContext(tab.id);
     return normalizeInput(context, fallback);
   } catch {
     return fallback;
+  }
+}
+
+async function getPageContext(tabId) {
+  try {
+    return await chrome.tabs.sendMessage(tabId, { type: "GET_CONTEXT" });
+  } catch {
+    await chrome.scripting.executeScript({
+      target: { tabId },
+      files: ["src/content.js"]
+    });
+    return await chrome.tabs.sendMessage(tabId, { type: "GET_CONTEXT" });
   }
 }
 
