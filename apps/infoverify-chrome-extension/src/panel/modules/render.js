@@ -8,6 +8,8 @@ import {
   verdictPillEl,
   confidenceEl,
   summaryEl,
+  conclusionReasonEl,
+  rationaleEl,
   reproScoreEl,
   crossScoreEl,
   detailScoreEl,
@@ -73,6 +75,8 @@ export function setLoading(loading, mode = "local") {
 export function resetResultsView(mode = "local") {
   setVerdict("—");
   summaryEl.textContent = "—";
+  rationaleEl.textContent = "—";
+  conclusionReasonEl.hidden = true;
   renderRuleScores(null, null);
   renderEvidence([]);
   googleNewsQueryEl.textContent = "—";
@@ -89,6 +93,10 @@ export function renderVerification(payload) {
   setStatus("Done");
   setVerdict(payload.verdict, payload.confidence);
   summaryEl.textContent = payload.summary || "—";
+  const rationale = String(payload.rationale || "").trim();
+  const summary = String(payload.summary || "").trim();
+  rationaleEl.textContent = rationale || "—";
+  conclusionReasonEl.hidden = !rationale || rationale === summary;
   renderRuleScores(payload.rule_scores || null, payload.rule_notes || null, {
     specificity: payload.specificity_summary || "",
     cross_validation: payload.cross_validation_summary || "",

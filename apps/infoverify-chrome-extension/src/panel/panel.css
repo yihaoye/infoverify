@@ -531,9 +531,30 @@ body {
 }
 
 .conclusionCard .verdictRow,
-.conclusionCard .summary {
+.conclusionCard > .summary,
+.conclusionCard .conclusionReason {
   position: relative;
   z-index: 1;
+}
+
+.conclusionReason {
+  margin-top: 13px;
+  padding-top: 11px;
+  border-top: 1px solid rgba(185, 201, 255, 0.18);
+}
+
+.conclusionReasonLabel {
+  margin-bottom: 4px;
+  color: #b9c5ff;
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.conclusionReasonText {
+  color: var(--muted);
+  font-size: 12px;
 }
 
 .cardTitle,
