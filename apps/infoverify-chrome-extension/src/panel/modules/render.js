@@ -22,9 +22,6 @@ import {
   googleNewsQueryEl,
   newsQueryLabelEl,
   newsSummaryLabelEl,
-  llmVerdictPillEl,
-  llmConfidenceEl,
-  llmRationaleEl,
   modePillEl,
   localModeButtonEl,
   cloudModeButtonEl
@@ -82,7 +79,6 @@ export function resetResultsView(mode = "local") {
   googleNewsSummaryEl.textContent = "—";
   newsQueryLabelEl.textContent = mode === "cloud" ? "Google Search queries" : "Google News query";
   newsSummaryLabelEl.textContent = mode === "cloud" ? "Google Search grounding" : "Google News cross-validation";
-  setLLMAssessment(null);
   setDebugTrace("");
 }
 
@@ -103,7 +99,6 @@ export function renderVerification(payload) {
   newsSummaryLabelEl.textContent = mode === "cloud" ? "Google Search grounding" : "Google News cross-validation";
   googleNewsQueryEl.textContent = payload.news_query || "—";
   googleNewsSummaryEl.textContent = payload.news_summary || "—";
-  setLLMAssessment(payload.llm_assessment || null);
   setDebugTrace(payload.debug_trace || payload.llm_assessment?.debug_trace || "");
 }
 
@@ -131,21 +126,6 @@ export function setVerdict(verdict, confidence) {
 
   confidenceEl.textContent =
     typeof confidence === "number" ? `Confidence ${(confidence * 100).toFixed(0)}%` : "—";
-}
-
-export function setLLMAssessment(assess) {
-  llmVerdictPillEl.className = "pill";
-  llmVerdictPillEl.textContent = assess?.verdict || "—";
-  const verdict = assess?.verdict;
-  if (verdict === "high") llmVerdictPillEl.classList.add("good");
-  else if (verdict === "low") llmVerdictPillEl.classList.add("bad");
-  else if (verdict === "medium" || verdict === "unclear") llmVerdictPillEl.classList.add("warn");
-
-  llmConfidenceEl.textContent =
-    typeof assess?.confidence === "number" ? `Confidence ${(assess.confidence * 100).toFixed(0)}%` : "—";
-
-  if (assess?.error) llmRationaleEl.textContent = `Unavailable: ${assess.error}`;
-  else llmRationaleEl.textContent = assess?.rationale || assess?.summary || "—";
 }
 
 export function renderEvidence(evidence) {
