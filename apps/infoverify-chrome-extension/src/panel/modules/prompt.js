@@ -1,66 +1,69 @@
 // ---------- Local model prompt construction and output schema ----------
-import { getAnalysisText } from "./utils.js";
+import { formatDateOnly, getAnalysisText } from "./utils.js";
 import { getLanguageLabel } from "./language.js";
-import {
-  buildReproducibilitySummary,
-  buildCrossValidationSummary,
-  buildSpecificitySummary
-} from "./summaries.js";
 
+// On-device decoding speed is the main latency cost, so the model is asked only
+// for what the rules cannot compute: per-item stance, a specificity judgement,
+// its verdict, and short prose. Reproducibility and cross-validation scores are
+// derived deterministically from those stances plus MBFC.
 export function buildLocalPrompt(input, newsBundle, mbfcEntry, modelOutputLanguage = "en", displayLanguage = "en") {
   const analysisText = getAnalysisText(input);
-  const specificitySummary = buildSpecificitySummary(input, "en");
-  const crossValidationSummary = buildCrossValidationSummary(newsBundle, "en");
-  const reproducibilitySummary = buildReproducibilitySummary(newsBundle, mbfcEntry, "en");
   const outputLanguageLabel = getLanguageLabel(modelOutputLanguage);
   const displayLanguageLabel = getLanguageLabel(displayLanguage);
-  const newsLines = Array.isArray(newsBundle?.items) && newsBundle.items.length > 0
-    ? newsBundle.items.map((item, index) => {
-        const date = item.retrieved_at ? new Date(item.retrieved_at).toISOString().slice(0, 10) : "unknown-date";
+  const items = Array.isArray(newsBundle?.items) ? newsBundle.items : [];
+  const newsLines = items.length > 0
+    ? items.map((item, index) => {
         const source = item.source || item.source_type || "Google News";
         const quote = item.quote || "";
-        return `${index + 1}. ${date} · ${source} · ${item.title || item.url || "Google News match"}${quote ? `\n   ${quote}` : ""}`;
+        return `${index + 1}. ${formatDateOnly(item.retrieved_at)} · ${source} · ${item.title || item.url || "Google News match"}${quote ? `\n   ${quote}` : ""}`;
       }).join("\n")
-    : "This query did not find a sufficiently close Google News result.";
-  const newsQueryLine = newsBundle?.query ? `Google News query: ${newsBundle.query}` : "Google News query: (empty)";
-  const newsAnchorLine = newsBundle?.anchorDate ? `News anchor date: ${newsBundle.anchorDate}` : "News anchor date: (none)";
+    : "(no results)";
+  const mbfcLine = mbfcEntry
+    ? `${mbfcEntry.hostname} · factual ${mbfcEntry.factual || mbfcEntry.rating || "unknown"}`
+    : "not rated";
   return [
-    "You are an information verification assistant. Judge only from the text below, the Google News evidence, and your training knowledge. Do not browse the web or invent outside facts.",
-    `Write the final answer in ${outputLanguageLabel}.`,
+    "You are an information verification assistant. Judge only from the claim, the numbered Google News results, and your training knowledge. Do not invent outside facts.",
+    `Write summary, rationale, and rule_notes in ${outputLanguageLabel}.`,
     displayLanguage === "zh" ? `The user interface will translate the final answer into ${displayLanguageLabel}.` : "",
-    "Evaluate the statement using three principles:",
-    "1) Specificity: judge the density and falsifiability of the claim itself. Focus on DIKW depth, 5W1H completeness, relevance between numbers and conclusions, precision of details, and low information entropy.",
-    "2) Cross-validation: judge whether independent sources support the claim. Focus on distinct publisher domains, source spread, and consistency with basic scientific knowledge.",
-    "3) Reproducibility: judge the claim's stability over time and the credibility of the source. Focus on MBFC domain reputation, first/recent appearance time, and whether different sources repeat the claim over time.",
-    "Google News evidence is the main input for cross-validation. MBFC is only for reproducibility and source credibility.",
-    "Return ONLY one compact, valid JSON object with these keys:",
-    `{ "verdict": "supported|contradicted|unclear", "confidence": 0.0, "overall_score": 0.0, "summary": "...", "rationale": "...", "rule_scores": {"reproducibility": 0.0, "cross_validation": 0.0, "detail_richness": 0.0}, "rule_notes": {"reproducibility": "...", "cross_validation": "...", "detail_richness": "..."}, "conflicts": ["..."], "missing": ["..."] }`,
-    "Rules:",
-    "- The verdict must reflect the claim's overall credibility.",
-    "- confidence and overall_score must be numbers between 0 and 1.",
-    "- rule_scores must correspond to reproducibility, cross_validation, and detail_richness.",
-    "- Keep summary, rationale, and each rule note under 180 characters. Cite a Google News publisher name or MBFC clue in a rule note when useful.",
-    "- Do not return evidence: the supplied Google News results are shown to the user separately.",
-    "- Return no more than two short entries in conflicts and missing.",
-    "- If the claim is too weak, too vague, or cannot be verified, return unclear.",
+    "Tasks:",
+    `1) stances: exactly ${items.length} labels, one per numbered news result in order. "support" = the result reports the same claim as true; "contradict" = it denies, debunks, or reports conflicting facts; "irrelevant" = a different event or topic. Sharing keywords is not support.`,
+    "2) specificity: 0 to 1, how concrete and falsifiable the claim is (who/what/when/where, precise numbers that actually back the conclusion, little vagueness).",
+    "3) verdict: supported, contradicted, or unclear. Use unclear when the evidence is thin, mixed, or off-topic.",
+    "Return ONLY one compact JSON object:",
+    `{"verdict":"supported|contradicted|unclear","stances":["support|contradict|irrelevant"],"specificity":0.0,"summary":"...","rationale":"...","rule_notes":{"reproducibility":"...","cross_validation":"...","detail_richness":"..."}}`,
+    "Keep summary, rationale, and each rule note under 120 characters. rule_notes: reproducibility = stability over time and source credibility; cross_validation = which publishers support or contradict; detail_richness = specificity.",
     "",
     `URL: ${input.url || ""}`,
     `Title: ${input.title || ""}`,
-    "Claim or page content to verify:",
+    `Page source reputation (MBFC): ${mbfcLine}`,
+    "Claim to verify:",
     analysisText,
     "",
-    newsQueryLine,
-    newsAnchorLine,
-    "Specificity cues:",
-    specificitySummary,
-    "",
-    "Cross-validation cues:",
-    crossValidationSummary,
-    "",
-    "Reproducibility cues:",
-    reproducibilitySummary,
-    "",
-    "Google News evidence bundle:",
+    newsBundle?.anchorDate ? `News anchor date: ${newsBundle.anchorDate}` : "",
+    "Google News results:",
     newsLines
-  ].join("\n");
+  ].filter((line) => line !== "").join("\n");
+}
+
+// JSON Schema passed as the Prompt API `responseConstraint`, so the model can
+// only emit parsable JSON. Deliberately limited to type/enum/properties/
+// required/items; counts and ranges are enforced by the normalizers instead.
+export function buildLocalResponseSchema() {
+  const text = { type: "string" };
+  return {
+    type: "object",
+    properties: {
+      verdict: { type: "string", enum: ["supported", "contradicted", "unclear"] },
+      stances: { type: "array", items: { type: "string", enum: ["support", "contradict", "irrelevant"] } },
+      specificity: { type: "number" },
+      summary: text,
+      rationale: text,
+      rule_notes: {
+        type: "object",
+        properties: { reproducibility: text, cross_validation: text, detail_richness: text },
+        required: ["reproducibility", "cross_validation", "detail_richness"]
+      }
+    },
+    required: ["verdict", "stances", "specificity", "summary", "rationale", "rule_notes"]
+  };
 }

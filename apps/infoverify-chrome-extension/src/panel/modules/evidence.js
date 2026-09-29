@@ -47,7 +47,8 @@ export function mergeEvidenceLists(primary, secondary, input) {
       url,
       quote,
       retrieved_at: String(item?.retrieved_at || ""),
-      source_type: String(item?.source_type || item?.type || "evidence")
+      source_type: String(item?.source_type || item?.type || "evidence"),
+      ...(item?.stance ? { stance: String(item.stance) } : {})
     });
   }
 

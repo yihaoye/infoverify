@@ -28,7 +28,7 @@ import {
   localModeButtonEl,
   cloudModeButtonEl
 } from "./dom.js";
-import { setStatus, setDebugTrace } from "./logging.js";
+import { setStatus } from "./logging.js";
 import { normalizeRuleScores, formatScore } from "./normalize.js";
 
 export function updateModeButtons(mode = "local") {
@@ -83,7 +83,6 @@ export function resetResultsView(mode = "local") {
   googleNewsSummaryEl.textContent = "—";
   newsQueryLabelEl.textContent = mode === "cloud" ? "Google Search queries" : "Google News query";
   newsSummaryLabelEl.textContent = mode === "cloud" ? "Google Search grounding" : "Google News cross-validation";
-  setDebugTrace("");
 }
 
 export function renderVerification(payload) {
@@ -107,7 +106,6 @@ export function renderVerification(payload) {
   newsSummaryLabelEl.textContent = mode === "cloud" ? "Google Search grounding" : "Google News cross-validation";
   googleNewsQueryEl.textContent = payload.news_query || "—";
   googleNewsSummaryEl.textContent = payload.news_summary || "—";
-  setDebugTrace(payload.debug_trace || payload.llm_assessment?.debug_trace || "");
 }
 
 export function renderRuleScores(ruleScores, ruleNotes, extraContext = {}) {
@@ -133,7 +131,24 @@ export function setVerdict(verdict, confidence) {
   else if (verdict === "unclear") verdictPillEl.classList.add("warn");
 
   confidenceEl.textContent =
-    typeof confidence === "number" ? `Confidence ${(confidence * 100).toFixed(0)}%` : "—";
+    typeof confidence === "number" ? `Credibility ${(confidence * 100).toFixed(0)}%` : "—";
+}
+
+const STANCE_TAGS = {
+  support: { label: "Supports", tone: "good" },
+  contradict: { label: "Contradicts", tone: "bad" },
+  irrelevant: { label: "Off-topic", tone: "" }
+};
+const STANCE_ORDER = { contradict: 0, support: 1, unknown: 2, irrelevant: 3 };
+
+// Evidence URLs come from model / API output, so only web links are clickable.
+function safeHref(url) {
+  try {
+    const parsed = new URL(String(url || ""));
+    return parsed.protocol === "https:" || parsed.protocol === "http:" ? parsed.href : "#";
+  } catch {
+    return "#";
+  }
 }
 
 export function renderEvidence(evidence) {
@@ -143,14 +158,25 @@ export function renderEvidence(evidence) {
     return;
   }
 
-  for (const item of evidence) {
+  // Contradicting evidence first (most decision-relevant), off-topic hits last.
+  const ordered = [...evidence].sort(
+    (left, right) => (STANCE_ORDER[left.stance] ?? 2) - (STANCE_ORDER[right.stance] ?? 2)
+  );
+  for (const item of ordered) {
     const wrap = document.createElement("div");
-    wrap.className = "evidenceItem";
+    wrap.className = item.stance === "irrelevant" ? "evidenceItem irrelevant" : "evidenceItem";
 
     const title = document.createElement("div");
     title.className = "evidenceTitle";
+    const tag = STANCE_TAGS[item.stance];
+    if (tag) {
+      const pill = document.createElement("span");
+      pill.className = tag.tone ? `pill stancePill ${tag.tone}` : "pill stancePill";
+      pill.textContent = tag.label;
+      title.appendChild(pill);
+    }
     const a = document.createElement("a");
-    a.href = item.url || "#";
+    a.href = safeHref(item.url);
     a.target = "_blank";
     a.rel = "noreferrer";
     a.textContent = item.title || item.url || "Evidence";

@@ -11,7 +11,6 @@ InfoVerify does not automatically read page content or run on every website. Its
 When you use the extension, we may process:
 - the text you select on a page
 - the current page URL and title as context for the selected text
-- optional debugging information you copy manually
 
 ## Where data is processed
 
@@ -37,7 +36,6 @@ Cloud AI is **off by default** and only runs when you click the "Cloud AI" butto
 ## Storage
 
 - Extension settings are stored in Chrome sync/local storage. The optional Gemini API key is stored in local storage only (never synced).
-- Debug traces are shown only in the extension UI and are copied only when you click the copy button.
 
 ## Questions
 

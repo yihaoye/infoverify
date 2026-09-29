@@ -1,6 +1,6 @@
 // ---------- Cloud AI (BYOK) orchestration: Google Gemini + Google Search grounding ----------
-import { DEBUG_PREFIX, GEMINI_API_BASE, GEMINI_DEFAULT_MODEL, SUPPORTED_OUTPUT_LANGUAGES } from "./constants.js";
-import { setStatus, truncateForDebug, buildDebugTrace } from "./logging.js";
+import { GEMINI_API_BASE, GEMINI_DEFAULT_MODEL, SUPPORTED_OUTPUT_LANGUAGES } from "./constants.js";
+import { reportError, setStatus } from "./logging.js";
 import { getAnalysisText, sanitizeModelText, safeReadText } from "./utils.js";
 import { getPreferredOutputLanguage, getLanguageLabel } from "./language.js";
 import { lookupMbfcEntry, normalizeHostname } from "./mbfc.js";
@@ -13,7 +13,6 @@ import {
   normalizeConfidence,
   normalizeVerdict,
   normalizeEvidence,
-  normalizeList,
   verdictFromScore,
   averageRuleScores,
   parseAssessmentJson
@@ -68,7 +67,7 @@ function buildCloudPrompt(input, analysisText, language) {
     "2) Cross-validation: judge whether independent web sources support the claim. Prefer multiple reputable, independent domains; note disagreement.",
     "3) Reproducibility: judge the claim's stability over time and the credibility of the sources you found.",
     "Return ONLY valid JSON with these keys:",
-    `{ "verdict": "supported|contradicted|unclear", "confidence": 0.0, "overall_score": 0.0, "summary": "short ${outputLanguageLabel} summary", "rationale": "short ${outputLanguageLabel} explanation", "rule_scores": {"reproducibility": 0.0, "cross_validation": 0.0, "detail_richness": 0.0}, "rule_notes": {"reproducibility": "...", "cross_validation": "...", "detail_richness": "..."}, "evidence": [{"title":"...", "url":"...", "quote":"..."}], "conflicts": ["..."], "missing": ["..."] }`,
+    `{ "verdict": "supported|contradicted|unclear", "confidence": 0.0, "overall_score": 0.0, "summary": "short ${outputLanguageLabel} summary", "rationale": "short ${outputLanguageLabel} explanation", "rule_scores": {"reproducibility": 0.0, "cross_validation": 0.0, "detail_richness": 0.0}, "rule_notes": {"reproducibility": "...", "cross_validation": "...", "detail_richness": "..."}, "evidence": [{"title":"...", "url":"...", "quote":"..."}] }`,
     "Rules:",
     "- The verdict must reflect the claim's overall credibility.",
     "- confidence, overall_score, and every rule_score must be numbers between 0 and 1.",
@@ -177,12 +176,6 @@ export async function runCloudAnalysis(input, signal) {
 
   setStatus("Calling cloud AI (Gemini)...");
   const { text, sources, searchQueries } = await callGemini(config, prompt, signal);
-  console.info(`${DEBUG_PREFIX} cloud AI raw output`, {
-    model: config.model,
-    sources: sources.length,
-    searchQueries,
-    rawPreview: truncateForDebug(text, 3500)
-  });
 
   const mbfcEntry = await lookupMbfcEntry(input.url || "");
   const pseudoBundle = { items: sources, query: searchQueries.join("; "), summary: "" };
@@ -198,6 +191,9 @@ export async function runCloudAnalysis(input, signal) {
   };
 
   if (!parsed) {
+    reportError("cloud AI parse fallback", new Error("model output did not parse as JSON"), {
+      rawPreview: text.slice(0, 500)
+    });
     const ruleScores = buildDeterministicRuleScores(input, pseudoBundle, mbfcEntry);
     const confidence = normalizeConfidence(averageRuleScores(ruleScores));
     const rationale = sanitizeModelText(text) || "Cloud AI returned no parsable output; showing rule-based scores.";
@@ -209,18 +205,7 @@ export async function runCloudAnalysis(input, signal) {
       rule_scores: ruleScores,
       rule_notes: null,
       evidence: mergeEvidenceLists([], sources, input),
-      conflicts: [],
-      missing: [rationale],
-      ...base,
-      debug_trace: buildDebugTrace({
-        stage: "cloud-parse-fallback",
-        outputLanguage,
-        prompt,
-        raw: text,
-        parsed: null,
-        error: "raw output did not parse as JSON",
-        mbfc: mbfcEntry
-      })
+      ...base
     };
   }
 
@@ -238,8 +223,6 @@ export async function runCloudAnalysis(input, signal) {
     rule_scores: ruleScores,
     rule_notes: normalizeRuleNotes(parsed.rule_notes),
     evidence: mergeEvidenceLists(normalizeEvidence(parsed.evidence, input), sources, input),
-    conflicts: normalizeList(parsed.conflicts),
-    missing: normalizeList(parsed.missing),
     ...base
   };
 }

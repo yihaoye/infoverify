@@ -1,7 +1,6 @@
 // ---------- Normalization of model output, verdicts, and parsed payloads ----------
 import { clamp, sanitizeModelText } from "./utils.js";
 import { buildFallbackEvidence } from "./evidence.js";
-import { buildDebugTrace } from "./logging.js";
 
 export function normalizeResult(payload, mode, input) {
   const result = {
@@ -12,10 +11,6 @@ export function normalizeResult(payload, mode, input) {
     rule_scores: normalizeRuleScores(payload?.rule_scores),
     rule_notes: normalizeRuleNotes(payload?.rule_notes),
     evidence: normalizeEvidence(payload?.evidence, input),
-    conflicts: normalizeList(payload?.conflicts),
-    missing: normalizeList(payload?.missing),
-    llm_assessment: payload?.llm_assessment || null,
-    debug_trace: String(payload?.debug_trace || ""),
     mode,
     news_query: String(payload?.news_query || ""),
     news_summary: String(payload?.news_summary || ""),
@@ -23,15 +18,6 @@ export function normalizeResult(payload, mode, input) {
     cross_validation_summary: String(payload?.cross_validation_summary || ""),
     specificity_summary: String(payload?.specificity_summary || "")
   };
-
-  if (!result.llm_assessment) {
-    result.llm_assessment = {
-      verdict: result.verdict === "supported" ? "high" : result.verdict === "contradicted" ? "low" : "unclear",
-      confidence: result.confidence,
-      rationale: result.rationale,
-      summary: result.summary
-    };
-  }
 
   return result;
 }
@@ -51,21 +37,6 @@ export function errorResult({ input, mode, message }) {
         source_type: "page"
       }
     ],
-    conflicts: [],
-    missing: [message],
-    llm_assessment: {
-      verdict: "unclear",
-      confidence: 0,
-      rationale: message,
-      error: message
-    },
-    debug_trace: buildDebugTrace({
-      stage: "error",
-      error: message,
-      prompt: "",
-      raw: "",
-      parsed: null
-    }),
     mode,
     news_summary: ""
   };
@@ -100,10 +71,10 @@ export function averageRuleScores(ruleScores) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
+// A low score only means weak evidence, so it maps to "unclear". "contradicted"
+// needs contradicting evidence or a model judgement (see assessVerdict).
 export function verdictFromScore(score) {
-  if (score >= 0.7) return "supported";
-  if (score <= 0.3) return "contradicted";
-  return "unclear";
+  return score >= 0.7 ? "supported" : "unclear";
 }
 
 export function formatScore(score) {
@@ -121,13 +92,9 @@ export function normalizeEvidence(evidence, input) {
     url: String(item?.url || input.url || ""),
     quote: String(item?.quote || item?.excerpt || item?.rationale || "").trim(),
     retrieved_at: String(item?.retrieved_at || input.capturedAt || new Date().toISOString()),
-    source_type: String(item?.source_type || item?.type || "evidence")
+    source_type: String(item?.source_type || item?.type || "evidence"),
+    ...(item?.stance ? { stance: String(item.stance) } : {})
   }));
-}
-
-export function normalizeList(value) {
-  if (!Array.isArray(value)) return [];
-  return value.map((item) => String(item)).filter(Boolean);
 }
 
 export function normalizeVerdict(verdict) {

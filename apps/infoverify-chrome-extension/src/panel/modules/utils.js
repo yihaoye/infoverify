@@ -21,7 +21,7 @@ export function summarizeCounts(values) {
 }
 
 // Sentinel returned by formatDateOnly when a date is missing or unparsable.
-export const UNKNOWN_DATE = "未知";
+export const UNKNOWN_DATE = "unknown";
 
 export function formatDateOnly(value) {
   if (!value) return UNKNOWN_DATE;

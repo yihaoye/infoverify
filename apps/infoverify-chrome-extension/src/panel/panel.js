@@ -1,7 +1,7 @@
 // ---------- Panel entry point: wires UI events and Chrome messaging ----------
 import { DEBUG_PREFIX } from "./modules/constants.js";
 import { state } from "./modules/state.js";
-import { localModeButtonEl, cloudModeButtonEl, downloadModelButtonEl, debugCopyButtonEl, debugStatusEl } from "./modules/dom.js";
+import { localModeButtonEl, cloudModeButtonEl, downloadModelButtonEl } from "./modules/dom.js";
 import { updateModeButtons, renderVerification } from "./modules/render.js";
 import { requestRun, startVerification, hydrateInitialState } from "./modules/verification.js";
 import { getModelAvailability, downloadModel } from "./modules/model.js";
@@ -70,20 +70,6 @@ downloadModelButtonEl?.addEventListener("click", async () => {
     downloadModelButtonEl.disabled = false;
     downloadModelButtonEl.textContent = "Download failed — retry";
   }
-});
-
-debugCopyButtonEl.addEventListener("click", () => {
-  if (!state.lastDebugTrace) return;
-  void navigator.clipboard?.writeText?.(state.lastDebugTrace).then(() => {
-    debugStatusEl.textContent = "Copied to clipboard";
-    window.setTimeout(() => {
-      if (debugStatusEl.textContent === "Copied to clipboard") {
-        debugStatusEl.textContent = "—";
-      }
-    }, 1500);
-  }).catch(() => {
-    debugStatusEl.textContent = "Copy failed, please select and copy manually";
-  });
 });
 
 window.addEventListener("error", (event) => {

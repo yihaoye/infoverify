@@ -1,5 +1,6 @@
 // ---------- Google News RSS query generation, caching, and parsing ----------
-import { DEBUG_PREFIX, googleNewsCacheTtlMs } from "./constants.js";
+import { googleNewsCacheTtlMs } from "./constants.js";
+import { reportError } from "./logging.js";
 import { resolveOutputLanguage } from "./language.js";
 import { normalizeHostname } from "./mbfc.js";
 import { safeReadText, sanitizeModelText } from "./utils.js";
@@ -13,7 +14,6 @@ export async function fetchGoogleNewsBundle(input, signal, outputLanguage = "en"
       items: [],
       anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : "",
       errorMessage,
-      rawPreview: "",
       summary: summarizeGoogleNewsBundle("", [], errorMessage, anchorDate, outputLanguage)
     };
   }
@@ -21,10 +21,6 @@ export async function fetchGoogleNewsBundle(input, signal, outputLanguage = "en"
   const queries = await buildGoogleNewsQueries(input, signal);
   const anchorDate = extractAnchorDate(input);
   const query = queries[0] || "";
-  console.info(`${DEBUG_PREFIX} Google News query candidates`, {
-    queries,
-    anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : ""
-  });
   if (!query) {
     return {
       query: "",
@@ -50,7 +46,6 @@ export async function fetchGoogleNewsBundle(input, signal, outputLanguage = "en"
     items: topItems,
     anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : "",
     errorMessage: result.errorMessage || "",
-    rawPreview: String(result.rawPreview || ""),
     summary: summarizeGoogleNewsBundle(query, topItems, result.errorMessage, anchorDate, outputLanguage)
   };
   // Only cache successful results so transient RSS errors do not become stuck.
@@ -112,18 +107,15 @@ export async function fetchGoogleNewsItems(query, signal) {
     referrerPolicy: "no-referrer"
   });
   if (!resp.ok) {
+    // The response body is an HTML error page: log it, but keep it out of the UI.
     const text = await safeReadText(resp);
-    const payloadPreview = text.slice(0, 600);
-    console.error(`${DEBUG_PREFIX} Google News HTTP error`, {
-      status: resp.status,
+    reportError("Google News HTTP error", new Error(`HTTP ${resp.status}`), {
       statusText: resp.statusText,
-      payloadPreview,
-      endpoint: endpoint.toString()
+      payloadPreview: text.slice(0, 600)
     });
     return {
       items: [],
-      errorMessage: `Google News HTTP ${resp.status}${text ? ` - ${text}` : ""}`,
-      rawPreview: payloadPreview
+      errorMessage: `Google News HTTP ${resp.status}${resp.statusText ? ` ${resp.statusText}` : ""}`
     };
   }
 
@@ -132,16 +124,14 @@ export async function fetchGoogleNewsItems(query, signal) {
   if (document.querySelector("parsererror")) {
     return {
       items: [],
-      errorMessage: "Google News returned invalid RSS",
-      rawPreview: text.slice(0, 600)
+      errorMessage: "Google News returned invalid RSS"
     };
   }
   const rawItems = Array.from(document.querySelectorAll("item"));
 
   return {
     items: rawItems.map(normalizeGoogleNewsItem).filter((item) => item.title || item.url),
-    errorMessage: "",
-    rawPreview: text.slice(0, 600)
+    errorMessage: ""
   };
 }
 
@@ -306,6 +296,7 @@ export async function buildPromptDrivenGoogleNewsQuery(input, signal) {
   const api = globalThis.LanguageModel;
   if (!api) return "";
 
+  let session = null;
   try {
     const availability = await api.availability({
       expectedInputs: [{ type: "text", languages: ["en"] }],
@@ -313,7 +304,7 @@ export async function buildPromptDrivenGoogleNewsQuery(input, signal) {
     });
     if (availability === "unavailable") return "";
 
-    const session = await api.create({
+    session = await api.create({
       expectedInputs: [{ type: "text", languages: ["en"] }],
       expectedOutputs: [{ type: "text", languages: ["en"] }],
       signal
@@ -333,11 +324,10 @@ export async function buildPromptDrivenGoogleNewsQuery(input, signal) {
     const raw = sanitizeModelText(await session.prompt(queryPrompt, { signal }));
     return cleanGoogleNewsQuery(raw);
   } catch (err) {
-    console.info(`${DEBUG_PREFIX} Google News prompt query unavailable`, {
-      message: String(err?.message || err),
-      stack: err?.stack || ""
-    });
+    reportError("Google News query generation", err);
     return "";
+  } finally {
+    session?.destroy?.();
   }
 }
 

@@ -1,7 +1,7 @@
 // ---------- Local AI orchestration and scoring pipeline ----------
 import { DEBUG_PREFIX } from "./constants.js";
 import { googleNewsSummaryEl, thinkingTextEl } from "./dom.js";
-import { reportError, truncateForDebug, buildDebugTrace, setStatus } from "./logging.js";
+import { reportError, setStatus } from "./logging.js";
 import { sanitizeModelText } from "./utils.js";
 import {
   getPreferredOutputLanguage,
@@ -12,19 +12,15 @@ import {
 } from "./language.js";
 import { createLanguageModelSession } from "./model.js";
 import { fetchGoogleNewsBundle, extractAnchorDate, summarizeGoogleNewsBundle } from "./google_news.js";
-import { lookupMbfcEntry } from "./mbfc.js";
-import { buildLocalPrompt } from "./prompt.js";
-import { buildDeterministicLocalAssessment, buildDeterministicRuleScores } from "./scoring.js";
+import { lookupMbfcEntry, annotateSourceCredibility } from "./mbfc.js";
+import { buildLocalPrompt, buildLocalResponseSchema } from "./prompt.js";
 import {
-  normalizeRuleScores,
-  normalizeRuleNotes,
-  normalizeVerdict,
-  normalizeEvidence,
-  normalizeList,
-  verdictFromScore,
-  averageRuleScores,
-  parseAssessmentJson
-} from "./normalize.js";
+  buildDeterministicLocalAssessment,
+  buildDeterministicRuleScores,
+  assessVerdict
+} from "./scoring.js";
+import { applyStances } from "./stance.js";
+import { normalizeRuleNotes, parseAssessmentJson } from "./normalize.js";
 import { mergeEvidenceLists } from "./evidence.js";
 import {
   buildReproducibilitySummary,
@@ -32,13 +28,44 @@ import {
   buildSpecificitySummary
 } from "./summaries.js";
 
+// Constrained decoding guarantees parsable JSON. If this Chrome build rejects
+// the constraint itself, retry once unconstrained rather than losing the run.
 export async function promptLocalAssessment(session, prompt, signal) {
-  return await session.prompt(prompt, { signal });
+  try {
+    return await session.prompt(prompt, {
+      signal,
+      responseConstraint: buildLocalResponseSchema(),
+      // The prompt already describes the format; don't prepend the schema too.
+      omitResponseConstraintInput: true
+    });
+  } catch (err) {
+    if (signal?.aborted || err?.name === "AbortError") throw err;
+    reportError("local AI constrained prompt", err);
+    return await session.prompt(prompt, { signal });
+  }
+}
+
+// Wall-clock per pipeline stage, logged on every run to find the slow step.
+function createStageTimer() {
+  const startedAt = performance.now();
+  let last = startedAt;
+  const stages = {};
+  return {
+    mark(name) {
+      const now = performance.now();
+      stages[name] = Math.round(now - last);
+      last = now;
+    },
+    report() {
+      return { ...stages, total: Math.round(performance.now() - startedAt) };
+    }
+  };
 }
 
 export async function runLocalAnalysis(input, signal) {
   const outputLanguage = await getPreferredOutputLanguage();
   const modelOutputLanguage = resolveModelOutputLanguage(outputLanguage);
+  const timer = createStageTimer();
 
   // Create the model session up front. If "Analyze" was clicked before the
   // model finished downloading, this also drives the (gesture-authorized)
@@ -65,8 +92,10 @@ export async function runLocalAnalysis(input, signal) {
     sessionError = err;
     reportError("createLanguageModelSession", err, { outputLanguage, modelOutputLanguage });
   }
+  timer.mark("session");
 
   const preparedInput = await prepareEnglishAnalysisInput(input, signal);
+  timer.mark("inputTranslation");
 
   googleNewsSummaryEl.textContent = "Searching Google News...";
   let newsBundle;
@@ -84,12 +113,16 @@ export async function runLocalAnalysis(input, signal) {
       items: [],
       anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : "",
       errorMessage,
-      rawPreview: "",
       summary: summarizeGoogleNewsBundle("", [], errorMessage, anchorDate, outputLanguage)
     };
   }
   googleNewsSummaryEl.textContent = newsBundle.summary || "—";
-  const mbfcEntry = await lookupMbfcEntry(preparedInput.url || "");
+  timer.mark("newsQueryAndFetch");
+  const [mbfcEntry, credibleItems] = await Promise.all([
+    lookupMbfcEntry(preparedInput.url || ""),
+    annotateSourceCredibility(newsBundle.items)
+  ]);
+  newsBundle = { ...newsBundle, items: credibleItems };
 
   // AI session unavailable: keep the rule-based scores and surface the reason.
   if (!session) {
@@ -97,20 +130,7 @@ export async function runLocalAnalysis(input, signal) {
     const fallback = buildDeterministicLocalAssessment(preparedInput, newsBundle, mbfcEntry, "", outputLanguage);
     fallback.summary = reason;
     fallback.rationale = reason;
-    fallback.missing = [reason];
-    fallback.debug_trace = buildDebugTrace({
-      stage: "local-session-unavailable",
-      outputLanguage,
-      modelOutputLanguage,
-      prompt: "",
-      raw: "",
-      parsed: null,
-      error: reason,
-      newsSummary: newsBundle.summary,
-      newsRawPreview: newsBundle.rawPreview,
-      mbfc: mbfcEntry
-    });
-    console.error(`${DEBUG_PREFIX} local AI session unavailable`, { error: reason });
+    console.info(`${DEBUG_PREFIX} stage timings (ms)`, timer.report());
     return fallback;
   }
 
@@ -125,81 +145,49 @@ export async function runLocalAnalysis(input, signal) {
     });
     raw = "";
   }
-  console.info(`${DEBUG_PREFIX} local AI raw output`, {
-    outputLanguage,
-    modelOutputLanguage,
-    promptPreview: truncateForDebug(prompt, 2500),
-    rawPreview: truncateForDebug(raw, 3500)
-  });
+  timer.mark("modelPrompt");
+  session.destroy?.();
   const parsed = parseAssessmentJson(raw);
   if (!parsed) {
     const fallback = buildDeterministicLocalAssessment(preparedInput, newsBundle, mbfcEntry, raw, outputLanguage);
-    fallback.debug_trace = buildDebugTrace({
-      stage: "local-parse-fallback",
-      outputLanguage,
-      modelOutputLanguage,
-      prompt,
-      raw,
-      parsed: null,
-      error: "raw output did not parse as JSON",
-      newsSummary: newsBundle.summary,
-      newsRawPreview: newsBundle.rawPreview,
-      mbfc: mbfcEntry,
-      analysisLanguage: preparedInput.analysisLanguage,
-      analysisLanguageConfidence: preparedInput.analysisLanguageConfidence,
-      inputWasTranslated: Boolean(preparedInput.inputWasTranslated)
-    });
-    console.error(`${DEBUG_PREFIX} local AI parse fallback`, {
-      stack: "",
-      debug_trace: fallback.debug_trace,
-      promptPreview: truncateForDebug(prompt, 2500),
-      rawPreview: truncateForDebug(raw, 3500)
-    });
+    // An empty `raw` was already reported by the prompt failure above.
+    if (raw) {
+      reportError("local AI parse fallback", new Error("model output did not parse as JSON"), {
+        rawPreview: String(raw).slice(0, 500)
+      });
+    }
+    console.info(`${DEBUG_PREFIX} stage timings (ms)`, timer.report());
     return fallback;
   }
 
-  const deterministicRuleScores = buildDeterministicRuleScores(preparedInput, newsBundle, mbfcEntry);
-  const ruleScores = mergeLocalRuleScores(parsed.rule_scores, deterministicRuleScores);
-  const overallScore = averageRuleScores(ruleScores);
+  const stancedBundle = { ...newsBundle, items: applyStances(newsBundle.items, parsed.stances) };
+  const ruleScores = buildDeterministicRuleScores(preparedInput, stancedBundle, mbfcEntry, {
+    modelSpecificity: parsed.specificity
+  });
+  const { verdict, confidence } = assessVerdict({
+    modelVerdict: parsed.verdict,
+    ruleScores,
+    items: stancedBundle.items
+  });
   const result = {
-    verdict: normalizeVerdict(parsed.verdict || verdictFromScore(overallScore)),
-    confidence: overallScore,
+    verdict,
+    confidence,
     summary: sanitizeModelText(parsed.summary || parsed.rationale || fallbackLanguageText(outputLanguage, "analysisDone")),
     rationale: sanitizeModelText(parsed.rationale || parsed.summary || fallbackLanguageText(outputLanguage, "analysisDone")),
     rule_scores: ruleScores,
     rule_notes: normalizeRuleNotes(parsed.rule_notes),
-    evidence: mergeEvidenceLists(normalizeEvidence(parsed.evidence, preparedInput), newsBundle.items, preparedInput),
-    conflicts: normalizeList(parsed.conflicts),
-    missing: normalizeList(parsed.missing),
+    evidence: mergeEvidenceLists([], stancedBundle.items, preparedInput),
     news_query: newsBundle.query || "",
     news_summary: newsBundle.summary,
-    reproducibility_summary: buildReproducibilitySummary(newsBundle, mbfcEntry, outputLanguage),
-    cross_validation_summary: buildCrossValidationSummary(newsBundle, outputLanguage),
+    reproducibility_summary: buildReproducibilitySummary(stancedBundle, mbfcEntry, outputLanguage),
+    cross_validation_summary: buildCrossValidationSummary(stancedBundle, outputLanguage),
     specificity_summary: buildSpecificitySummary(preparedInput, outputLanguage)
   };
 
   const localizedResult = outputLanguage === "zh"
     ? await localizeAssessmentResult(result, outputLanguage, signal)
     : result;
-  console.info(`${DEBUG_PREFIX} local AI success`, {
-    outputLanguage,
-    modelOutputLanguage,
-    verdict: localizedResult.verdict,
-    confidence: localizedResult.confidence,
-    stack: ""
-  });
+  timer.mark("outputTranslation");
+  console.info(`${DEBUG_PREFIX} stage timings (ms)`, timer.report());
   return localizedResult;
-}
-
-function mergeLocalRuleScores(modelRuleScores, deterministicRuleScores) {
-  const modelScores = normalizeRuleScores(modelRuleScores);
-  const mergedScores = { ...modelScores };
-
-  for (const ruleName of ["reproducibility", "cross_validation", "detail_richness"]) {
-    if (mergedScores[ruleName] === 0 && deterministicRuleScores[ruleName] > 0) {
-      mergedScores[ruleName] = deterministicRuleScores[ruleName];
-    }
-  }
-
-  return mergedScores;
 }

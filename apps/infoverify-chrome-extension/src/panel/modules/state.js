@@ -7,7 +7,6 @@ export const state = {
   loadingHideTimer: 0,
   activeRun: { id: "", mode: "", controller: null },
   mbfcDatasetPromise: null,
-  lastDebugTrace: "",
   languageDetectorCache: null,
   translatorCache: new Map()
 };

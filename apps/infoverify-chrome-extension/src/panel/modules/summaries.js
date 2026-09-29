@@ -1,6 +1,7 @@
 // ---------- Localized summary builders for the three scoring principles ----------
 import { resolveOutputLanguage } from "./language.js";
 import { countDistinctValues, formatDateOnly } from "./utils.js";
+import { stanceStats } from "./stance.js";
 
 const REPRODUCIBILITY_COPY = {
   en: {
@@ -51,38 +52,36 @@ const CROSS_VALIDATION_COPY = {
     prefix: "Google News cross-validation",
     hitsLabel: "hits",
     domainsLabel: "distinct domains",
+    stances: (s) => `Stance: ${s.support} support · ${s.contradict} contradict · ${s.irrelevant} irrelevant${s.unknown ? ` · ${s.unknown} unlabeled` : ""}`,
     span: "Time span",
-    cue: "Assessment cue: cross-validation is stronger when multiple independent publisher domains report the claim over time."
+    cue: "Assessment cue: cross-validation is stronger when multiple independent publishers report the same claim, and weaker when publishers contradict it."
   },
   es: {
     empty: "Validación cruzada de Google News: no hay resultados utilizables, por lo que la corroboración independiente es débil.",
     prefix: "Validación cruzada de Google News",
     hitsLabel: "coincidencias",
     domainsLabel: "dominios distintos",
-    countriesLabel: "países de origen",
-    tone: "Distribución de tono",
+    stances: (s) => `Postura: ${s.support} a favor · ${s.contradict} en contra · ${s.irrelevant} irrelevantes${s.unknown ? ` · ${s.unknown} sin etiquetar` : ""}`,
     span: "Intervalo de tiempo",
-    cue: "Pista de evaluación: la validación cruzada es más fuerte cuando coinciden múltiples dominios, múltiples países y un tono consistente."
+    cue: "Pista de evaluación: la validación cruzada es más fuerte cuando varios medios independientes informan la misma afirmación y más débil cuando la contradicen."
   },
   ja: {
     empty: "Google News のクロス検証: 利用できるニュース結果がなく、独立した裏付けは弱いです。",
     prefix: "Google News のクロス検証",
     hitsLabel: "件のヒット",
     domainsLabel: "異なるドメイン",
-    countriesLabel: "発信国",
-    tone: "トーン分布",
+    stances: (s) => `立場: 支持 ${s.support} · 反論 ${s.contradict} · 無関係 ${s.irrelevant}${s.unknown ? ` · 未判定 ${s.unknown}` : ""}`,
     span: "期間",
-    cue: "評価の目安: 複数のドメイン、複数の国、そして一貫したトーンがそろうほどクロス検証は強くなります。"
+    cue: "評価の目安: 複数の独立した媒体が同じ主張を報じるほどクロス検証は強くなり、反論する媒体があれば弱くなります。"
   },
   zh: {
     empty: "Google News 交叉验证：没有可用新闻结果，因此独立印证较弱。",
     prefix: "Google News 交叉验证",
     hitsLabel: "条命中",
     domainsLabel: "个独立域名",
-    countriesLabel: "个来源国家",
-    tone: "口径分布",
+    stances: (s) => `立场：支持 ${s.support} · 反驳 ${s.contradict} · 无关 ${s.irrelevant}${s.unknown ? ` · 未判定 ${s.unknown}` : ""}`,
     span: "时间范围",
-    cue: "评估提示：当多个域名、多个国家和一致的口径同时出现时，交叉验证会更强。"
+    cue: "评估提示：多个独立媒体报道同一主张时交叉验证更强，有媒体反驳时则更弱。"
   }
 };
 
@@ -117,15 +116,17 @@ export function buildReproducibilitySummary(newsBundle, mbfcEntry, outputLanguag
   const copy = REPRODUCIBILITY_COPY[resolveOutputLanguage(outputLanguage)] || REPRODUCIBILITY_COPY.en;
   const lines = [];
   if (mbfcEntry) {
-    lines.push(`${copy.mbfc}: ${mbfcEntry.hostname}${mbfcEntry.rating ? ` · ${mbfcEntry.rating}` : ""}${mbfcEntry.label ? ` · ${mbfcEntry.label}` : ""}`);
+    lines.push(`${copy.mbfc}: ${mbfcEntry.hostname}${mbfcEntry.factual || mbfcEntry.rating ? ` · ${mbfcEntry.factual || mbfcEntry.rating}` : ""}${mbfcEntry.label ? ` · ${mbfcEntry.label}` : ""}`);
   } else {
     lines.push(`${copy.mbfc}: ${copy.noMatch}`);
   }
 
-  if (newsBundle?.items?.length) {
-    const firstDate = newsBundle.items[newsBundle.items.length - 1]?.retrieved_at || "";
-    const lastDate = newsBundle.items[0]?.retrieved_at || "";
-    const domains = countDistinctValues(newsBundle.items.map((item) => item.domain).filter(Boolean));
+  // Only publishers that could corroborate the claim count toward its timeline.
+  const { corroborating } = stanceStats(newsBundle?.items);
+  if (corroborating.length) {
+    const firstDate = corroborating[corroborating.length - 1]?.retrieved_at || "";
+    const lastDate = corroborating[0]?.retrieved_at || "";
+    const domains = countDistinctValues(corroborating.map((item) => item.domain).filter(Boolean));
     lines.push(`${copy.timeline}: ${copy.first} ${formatDateOnly(firstDate)} · ${copy.recent} ${formatDateOnly(lastDate)} · ${copy.distinct} ${domains}`);
   } else {
     lines.push(`${copy.timeline}: ${copy.noData}`);
@@ -146,6 +147,7 @@ export function buildCrossValidationSummary(newsBundle, outputLanguage = "en") {
   const timeline = `${formatDateOnly(items[items.length - 1]?.retrieved_at)} → ${formatDateOnly(items[0]?.retrieved_at)}`;
   return [
     `${copy.prefix}: ${items.length} ${copy.hitsLabel}, ${domains} ${copy.domainsLabel}`,
+    copy.stances(stanceStats(items)),
     `${copy.span}: ${timeline}`,
     copy.cue
   ].join("\n");

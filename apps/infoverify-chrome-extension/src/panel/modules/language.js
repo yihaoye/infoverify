@@ -149,15 +149,6 @@ export async function prepareEnglishAnalysisInput(input, signal) {
   };
 }
 
-export async function translateArray(values, sourceLanguage, targetLanguage, signal) {
-  if (!Array.isArray(values) || values.length === 0) return Array.isArray(values) ? [] : [];
-  const translated = [];
-  for (const value of values) {
-    translated.push(await shouldTranslateText(value, sourceLanguage, targetLanguage, signal));
-  }
-  return translated;
-}
-
 export async function localizeAssessmentResult(result, targetLanguage, signal) {
   if (!result || targetLanguage !== "zh") return result;
   const sourceLanguage = "en";
@@ -169,8 +160,6 @@ export async function localizeAssessmentResult(result, targetLanguage, signal) {
     reproducibility_summary: await shouldTranslateText(result.reproducibility_summary, sourceLanguage, targetLanguage, signal),
     cross_validation_summary: await shouldTranslateText(result.cross_validation_summary, sourceLanguage, targetLanguage, signal),
     specificity_summary: await shouldTranslateText(result.specificity_summary, sourceLanguage, targetLanguage, signal),
-    conflicts: await translateArray(result.conflicts, sourceLanguage, targetLanguage, signal),
-    missing: await translateArray(result.missing, sourceLanguage, targetLanguage, signal),
     evidence: Array.isArray(result.evidence)
       ? await Promise.all(result.evidence.map(async (item) => ({
           ...item,
@@ -185,15 +174,6 @@ export async function localizeAssessmentResult(result, targetLanguage, signal) {
       reproducibility: await shouldTranslateText(result.rule_notes?.reproducibility || "", sourceLanguage, targetLanguage, signal),
       cross_validation: await shouldTranslateText(result.rule_notes?.cross_validation || "", sourceLanguage, targetLanguage, signal),
       detail_richness: await shouldTranslateText(result.rule_notes?.detail_richness || "", sourceLanguage, targetLanguage, signal)
-    };
-  }
-
-  if (localized.llm_assessment) {
-    localized.llm_assessment = {
-      ...result.llm_assessment,
-      rationale: await shouldTranslateText(result.llm_assessment?.rationale || "", sourceLanguage, targetLanguage, signal),
-      summary: await shouldTranslateText(result.llm_assessment?.summary || "", sourceLanguage, targetLanguage, signal),
-      error: await shouldTranslateText(result.llm_assessment?.error || "", sourceLanguage, targetLanguage, signal)
     };
   }
 
