@@ -5,7 +5,7 @@ export const state = {
   currentVerification: null,
   loadingStartAt: 0,
   loadingHideTimer: 0,
-  elapsedTimer: 0,
+  progressTimer: 0,
   activeRun: { id: "", mode: "", controller: null },
   mbfcDatasetPromise: null,
   languageDetectorCache: null,

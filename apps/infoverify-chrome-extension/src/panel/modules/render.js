@@ -2,11 +2,8 @@
 import { minLoadingMs } from "./constants.js";
 import { state } from "./state.js";
 import {
-  statusEl,
   elapsedEl,
-  timingBreakdownEl,
   thinkingBannerEl,
-  thinkingTextEl,
   verdictPillEl,
   confidenceEl,
   summaryEl,
@@ -26,22 +23,18 @@ import {
   googleNewsQueryEl,
   newsQueryLabelEl,
   newsSummaryLabelEl,
-  modePillEl,
-  localModeButtonEl,
-  cloudModeButtonEl
+  modePillEl
 } from "./dom.js";
 import { setStatus } from "./logging.js";
 import { normalizeRuleScores, formatScore } from "./normalize.js";
+import { startProgress, finishProgress } from "./progress.js";
 
-export function updateModeButtons(mode = "local") {
-  const isCloud = mode === "cloud";
-  localModeButtonEl.classList.toggle("active", !isCloud);
-  if (cloudModeButtonEl) {
-    cloudModeButtonEl.classList.toggle("active", isCloud);
-  }
-  modePillEl.textContent = isCloud ? "Cloud AI" : "Local AI";
+export function updateModePill(mode = "local") {
+  modePillEl.textContent = mode === "cloud" ? "Cloud AI" : "Local AI";
 }
 
+// While loading, the "Thinking" banner shows the step, elapsed time, and a
+// progress bar; the status line stays empty until the run ends.
 export function setLoading(loading, mode = "local") {
   if (loading) {
     if (state.loadingHideTimer) {
@@ -49,28 +42,20 @@ export function setLoading(loading, mode = "local") {
       state.loadingHideTimer = 0;
     }
     state.loadingStartAt = performance.now();
-    startElapsedCounter();
+    startProgress(mode);
     thinkingBannerEl.classList.add("active");
-    if (statusEl) {
-      statusEl.classList.add("thinking");
-      setStatus(mode === "cloud" ? "Calling cloud AI (Gemini)..." : "Calling local AI...");
-    }
-    thinkingTextEl.textContent = mode === "cloud"
-      ? "Analyzing text, searching the web, and generating a conclusion"
-      : "Analyzing text, searching Google News, and generating a local conclusion";
-    updateModeButtons(mode);
+    setStatus("");
+    elapsedEl.textContent = "";
+    elapsedEl.removeAttribute("title");
+    updateModePill(mode);
     return;
   }
 
-  stopElapsedCounter();
+  finishProgress();
   const elapsed = performance.now() - state.loadingStartAt;
   const remaining = Math.max(0, minLoadingMs - elapsed);
   state.loadingHideTimer = window.setTimeout(() => {
     thinkingBannerEl.classList.remove("active");
-    if (statusEl) {
-      statusEl.classList.remove("thinking");
-    }
-    thinkingTextEl.textContent = "Done";
     state.loadingHideTimer = 0;
   }, remaining);
 }
@@ -88,24 +73,6 @@ function formatSeconds(ms) {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
-// Live run clock next to the status line.
-function startElapsedCounter() {
-  stopElapsedCounter();
-  timingBreakdownEl.hidden = true;
-  const tick = () => {
-    elapsedEl.textContent = formatSeconds(performance.now() - state.loadingStartAt);
-  };
-  tick();
-  state.elapsedTimer = window.setInterval(tick, 100);
-}
-
-function stopElapsedCounter() {
-  if (state.elapsedTimer) {
-    window.clearInterval(state.elapsedTimer);
-    state.elapsedTimer = 0;
-  }
-}
-
 // e.g. " (first token 3.1s · 1240 chars out)": separates prompt
 // processing (time to first token) from output generation.
 function formatModelStats(stats) {
@@ -116,8 +83,8 @@ function formatModelStats(stats) {
   return parts.length ? ` (${parts.join(" · ")})` : "";
 }
 
-// Total run time plus a per-stage breakdown (local mode only), to show where
-// the wait goes. Stages under 50 ms are omitted as noise.
+// Total run time next to "Done"; the per-stage breakdown (local mode only) is
+// kept as its tooltip for troubleshooting. Stages under 50 ms are omitted.
 function renderTimings(payload) {
   elapsedEl.textContent = payload.elapsed_ms ? formatSeconds(payload.elapsed_ms) : "";
   const timings = payload.timings || {};
@@ -127,8 +94,8 @@ function renderTimings(payload) {
       const label = `${STAGE_LABELS[name]} ${formatSeconds(ms)}`;
       return name === "modelPrompt" ? `${label}${formatModelStats(timings.model)}` : label;
     });
-  timingBreakdownEl.textContent = stages.join(" · ");
-  timingBreakdownEl.hidden = stages.length === 0;
+  if (stages.length) elapsedEl.title = stages.join("\n");
+  else elapsedEl.removeAttribute("title");
 }
 
 // Clears the result cards back to their placeholder state at the start of a run.
@@ -156,14 +123,13 @@ export function renderVerification(payload) {
 // banner and live clock keep running until renderVerification.
 // `summaryPending`: no summary text has streamed in yet.
 export function renderPreview(payload, summaryPending = false) {
-  setStatus("Writing summary");
   renderResultCards(payload);
   if (summaryPending) summaryEl.textContent = "…";
 }
 
 function renderResultCards(payload) {
   const mode = payload?.mode === "cloud" ? "cloud" : "local";
-  updateModeButtons(mode);
+  updateModePill(mode);
   setVerdict(payload.verdict, payload.confidence);
   summaryEl.textContent = payload.summary || "—";
   const rationale = String(payload.rationale || "").trim();

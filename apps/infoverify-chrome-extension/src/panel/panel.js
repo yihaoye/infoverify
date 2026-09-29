@@ -1,38 +1,32 @@
 // ---------- Panel entry point: wires UI events and Chrome messaging ----------
 import { DEBUG_PREFIX } from "./modules/constants.js";
 import { state } from "./modules/state.js";
-import { localModeButtonEl, cloudModeButtonEl, downloadModelButtonEl } from "./modules/dom.js";
-import { updateModeButtons, renderVerification } from "./modules/render.js";
-import { requestRun, startVerification, hydrateInitialState } from "./modules/verification.js";
+import { rerunButtonEl, settingsButtonEl, downloadModelButtonEl } from "./modules/dom.js";
+import { updateModePill, renderVerification } from "./modules/render.js";
+import {
+  requestRun,
+  startVerification,
+  hydrateInitialState,
+  getPreferredAnalysisMode
+} from "./modules/verification.js";
 import { getModelAvailability, downloadModel } from "./modules/model.js";
-import { isCloudConfigured } from "./modules/cloud.js";
 import { reportError, setStatus } from "./modules/logging.js";
 
 // ---------- UI events ----------
-localModeButtonEl.addEventListener("click", () => {
-  void requestRun("local").then(() => refreshModelButton().catch(() => {}));
-});
-
-cloudModeButtonEl?.addEventListener("click", async () => {
-  if (!(await isCloudConfigured())) {
-    setStatus("Add your Gemini API key in Settings to use Cloud AI.");
-    chrome.runtime.openOptionsPage?.();
+// Re-checks the current selection with the mode chosen in Settings. The click
+// is the user gesture that a first-time local model download requires.
+rerunButtonEl.addEventListener("click", async () => {
+  const started = await requestRun(await getPreferredAnalysisMode());
+  if (!started) {
+    setStatus("Select text on a page, then right-click “Fact Check the Info”.");
     return;
   }
-
-  const cloudPermissionGranted = await requestCloudPermission();
-  if (!cloudPermissionGranted) {
-    setStatus("Cloud AI requires permission to connect to the Gemini API.");
-    return;
-  }
-  void requestRun("cloud");
+  refreshModelButton().catch(() => {});
 });
 
-async function requestCloudPermission() {
-  const details = { origins: ["https://generativelanguage.googleapis.com/*"] };
-  if (await chrome.permissions.contains(details)) return true;
-  return await chrome.permissions.request(details);
-}
+settingsButtonEl.addEventListener("click", () => {
+  chrome.runtime.openOptionsPage();
+});
 
 // Reflects the local model's download state on the dedicated button: hidden when
 // the model is ready, disabled when unsupported, actionable when a download is
@@ -72,6 +66,17 @@ downloadModelButtonEl?.addEventListener("click", async () => {
   }
 });
 
+// Settings apply to the next run; point at ⟳ when a result is already shown.
+chrome.storage.onChanged.addListener((changes, areaName) => {
+  if (areaName !== "sync" || !(changes.outputLanguage || changes.analysisMode)) return;
+  if (changes.outputLanguage) refreshModelButton().catch(() => {});
+  if (state.currentVerification?.input) {
+    setStatus("Settings changed. Click ⟳ to re-check with the new settings.");
+  } else if (changes.analysisMode) {
+    updateModePill(changes.analysisMode.newValue);
+  }
+});
+
 window.addEventListener("error", (event) => {
   console.error(`${DEBUG_PREFIX} window error`, {
     message: event.message,
@@ -97,7 +102,7 @@ chrome.runtime.onMessage.addListener((message) => {
   if (message.type === "VERIFY_STARTED") {
     const payload = message.payload || {};
     state.currentVerification = payload;
-    updateModeButtons();
+    updateModePill(payload.mode);
     if (payload.state === "loading" && payload.input) {
       void startVerification(payload);
     }

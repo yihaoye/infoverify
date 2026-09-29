@@ -61,6 +61,18 @@
         font: inherit;
         background: #fff;
       }
+      .cloudFields {
+        margin: 0;
+        padding: 0;
+        border: 0;
+        min-width: 0;
+      }
+
+      /* Cloud AI key and model only matter in Cloud AI mode. */
+      .cloudFields:disabled {
+        opacity: 0.45;
+      }
+
       .help {
         margin-top: 8px;
         color: #6b7280;
@@ -107,17 +119,27 @@
       </div>
 
       <div class="field">
-        <label for="cloudApiKey">Cloud AI — Gemini API key (optional)</label>
-        <input id="cloudApiKey" type="password" autocomplete="off" spellcheck="false" placeholder="AIza… (leave blank to keep Cloud AI disabled)" />
+        <label for="analysisMode">Analysis mode</label>
+        <select id="analysisMode">
+          <option value="local">Local AI (Chrome built-in, on this device)</option>
+          <option value="cloud">Cloud AI (Gemini + Google Search, needs an API key)</option>
+        </select>
+        <div class="help">Used for every “Fact Check the Info” run. Click ⟳ in the side panel to re-check the current selection after changing settings.</div>
+      </div>
+
+      <fieldset class="cloudFields" id="cloudFields">
+      <div class="field">
+        <label for="cloudApiKey">Cloud AI — Gemini API key</label>
+        <input id="cloudApiKey" type="password" autocomplete="off" spellcheck="false" placeholder="AIza…" />
         <div class="help">
           Don’t have a key?
           <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer">Create one for free in Google AI Studio</a>,
           then paste it here.
         </div>
         <div class="help">
-          Enables the “Cloud AI” button in the side panel. Cloud AI sends the selected text and page URL/title
+          Required for the Cloud AI analysis mode. Cloud AI sends the selected text and page URL/title
           to Google’s Gemini API using your key, and uses Google Search for cross-validation. Your key
-          is stored locally on this device only (never synced). Leave blank to keep everything local.
+          is stored locally on this device only (never synced).
         </div>
       </div>
       <div class="field">
@@ -125,6 +147,7 @@
         <input id="cloudModel" type="text" autocomplete="off" spellcheck="false" placeholder="gemini-2.5-flash" />
         <div class="help">Any Gemini model id your key can access. Defaults to gemini-2.5-flash.</div>
       </div>
+      </fieldset>
       <div class="status" id="saveStatus" aria-live="polite"></div>
     </div>
     <script src="./options.js"></script>

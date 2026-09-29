@@ -36,7 +36,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     ...captureInput(tab, info),
     googleNewsPermissionGranted
   };
-  const mode = "local";
+  const mode = await getAnalysisMode();
   const runId = crypto.randomUUID();
 
   const verification = {
@@ -53,6 +53,12 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
     payload: verification
   });
 });
+
+// The analysis mode chosen on the Options page ("local" by default).
+async function getAnalysisMode() {
+  const { analysisMode = "local" } = await chrome.storage.sync.get({ analysisMode: "local" });
+  return analysisMode === "cloud" ? "cloud" : "local";
+}
 
 function requestGoogleNewsPermission() {
   try {

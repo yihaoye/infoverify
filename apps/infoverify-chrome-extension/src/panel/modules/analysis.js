@@ -1,7 +1,8 @@
 // ---------- Local AI orchestration and scoring pipeline ----------
 import { USE_LOCAL_RESPONSE_CONSTRAINT } from "./constants.js";
-import { googleNewsSummaryEl, thinkingTextEl } from "./dom.js";
-import { reportError, setStatus } from "./logging.js";
+import { googleNewsSummaryEl } from "./dom.js";
+import { reportError } from "./logging.js";
+import { setProgressStage, skipProgressStage, setProgressDetail } from "./progress.js";
 import { sanitizeModelText } from "./utils.js";
 import {
   getPreferredOutputLanguage,
@@ -105,6 +106,7 @@ export async function runLocalAnalysis(input, signal, { onPreview } = {}) {
   const outputLanguage = await getPreferredOutputLanguage();
   const modelOutputLanguage = resolveModelOutputLanguage(outputLanguage);
   const timer = createStageTimer();
+  if (outputLanguage !== "zh") skipProgressStage("translatingOutput");
 
   // Create the model session up front. If "Analyze" was clicked before the
   // model finished downloading, this also drives the (gesture-authorized)
@@ -121,12 +123,9 @@ export async function runLocalAnalysis(input, signal, { onPreview } = {}) {
   try {
     session = await createLanguageModelSession(modelOutputLanguage, signal, {
       onDownloadProgress: (percent) => {
-        setStatus(`Downloading local AI model… ${percent}%`);
-        thinkingTextEl.textContent = `Downloading the local AI model (one-time setup): ${percent}%`;
+        setProgressDetail(`Downloading the local AI model (one-time setup): ${percent}%`, percent);
       }
     });
-    setStatus("Calling local AI...");
-    thinkingTextEl.textContent = "Analyzing text, searching Google News, and generating a local conclusion";
   } catch (err) {
     sessionError = err;
     reportError("createLanguageModelSession", err, { outputLanguage, modelOutputLanguage });
@@ -135,6 +134,7 @@ export async function runLocalAnalysis(input, signal, { onPreview } = {}) {
 
   const preparedInput = await prepareEnglishAnalysisInput(input, signal);
   timer.mark("inputTranslation");
+  setProgressStage("searchQuery");
 
   googleNewsSummaryEl.textContent = "Searching Google News...";
   let newsBundle;
@@ -149,6 +149,8 @@ export async function runLocalAnalysis(input, signal, { onPreview } = {}) {
       onQueryReady: (query) => {
         claimInContext = query.claimInContext;
         timer.mark("searchQuery");
+        if (query.source !== "model") skipProgressStage("searchQuery");
+        setProgressStage("news");
         if (session) {
           instructionsAppended = appendInstructions(
             session,
@@ -175,6 +177,7 @@ export async function runLocalAnalysis(input, signal, { onPreview } = {}) {
   }
   googleNewsSummaryEl.textContent = newsBundle.summary || "—";
   timer.mark("newsFetch");
+  setProgressStage("reading");
   const [mbfcEntry, credibleItems] = await Promise.all([
     lookupMbfcEntry(preparedInput.url || ""),
     annotateSourceCredibility(newsBundle.items)
@@ -228,17 +231,22 @@ export async function runLocalAnalysis(input, signal, { onPreview } = {}) {
   // not streamed there; the verdict and scores still show early.
   const streamSummary = outputLanguage !== "zh";
   let lastPreviewKey = "";
-  const handleStreamText = onPreview
-    ? (text) => {
-        const fields = extractStreamingAssessment(text);
-        if (!fields.ready) return;
-        const summary = streamSummary ? fields.summary : "";
-        const key = `${fields.verdict}|${summary}`;
-        if (key === lastPreviewKey) return;
-        lastPreviewKey = key;
-        onPreview(assembleResult({ ...fields, summary }));
-      }
-    : undefined;
+  let writing = false;
+  const handleStreamText = (text) => {
+    // The first token ends prompt processing; the rest is output generation.
+    if (!writing) {
+      writing = true;
+      setProgressStage("writing");
+    }
+    if (!onPreview) return;
+    const fields = extractStreamingAssessment(text);
+    if (!fields.ready) return;
+    const summary = streamSummary ? fields.summary : "";
+    const key = `${fields.verdict}|${summary}`;
+    if (key === lastPreviewKey) return;
+    lastPreviewKey = key;
+    onPreview(assembleResult({ ...fields, summary }));
+  };
 
   let raw = "";
   const modelStats = {};
@@ -269,6 +277,7 @@ export async function runLocalAnalysis(input, signal, { onPreview } = {}) {
   const result = assembleResult(parsed);
   if (!result.summary) result.summary = fallbackLanguageText(outputLanguage, "analysisDone");
 
+  if (outputLanguage === "zh") setProgressStage("translatingOutput");
   const localizedResult = outputLanguage === "zh"
     ? await localizeAssessmentResult(result, outputLanguage, signal)
     : result;

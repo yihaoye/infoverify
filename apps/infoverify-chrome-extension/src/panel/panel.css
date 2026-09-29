@@ -35,8 +35,20 @@ body {
   border-bottom: 1px solid var(--border);
 }
 
+/* Title block keeps at least 160px; when the actions (e.g. the one-time
+   "Download local AI" button) don't fit beside it, they wrap below instead of
+   squeezing the title. */
+.header {
+  flex-wrap: wrap;
+}
+
 .headerCopy {
+  flex: 1 1 160px;
   min-width: 0;
+}
+
+.modeSwitcher {
+  margin-left: auto;
 }
 
 .titleRow {
@@ -158,7 +170,15 @@ body {
   position: relative;
   z-index: 1;
   display: grid;
-  gap: 3px;
+  gap: 6px;
+  flex: 1;
+  min-width: 0;
+}
+
+.thinkingHeader {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
 }
 
 .thinkingLabel {
@@ -169,49 +189,37 @@ body {
   font-weight: 700;
 }
 
+.thinkingStep {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.thinkingElapsed {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
 .thinkingText {
   font-size: 14px;
   color: var(--text);
   font-weight: 600;
 }
 
-.thinkingBars {
-  position: relative;
-  z-index: 1;
-  display: flex;
-  align-items: end;
-  gap: 4px;
-  min-width: 40px;
-}
-
-.thinkingBars span {
-  width: 5px;
-  height: 18px;
+.progressTrack {
+  height: 5px;
   border-radius: 999px;
-  background: linear-gradient(180deg, var(--text), rgba(255, 255, 255, 0.24));
-  animation: barBounce 1s ease-in-out infinite;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
 }
 
-.thinkingBars span:nth-child(2) {
-  animation-delay: 0.16s;
-  height: 24px;
-}
-
-.thinkingBars span:nth-child(3) {
-  animation-delay: 0.32s;
-  height: 14px;
-}
-
-@keyframes barBounce {
-  0%,
-  100% {
-    transform: translateY(0);
-    opacity: 0.55;
-  }
-  50% {
-    transform: translateY(-7px);
-    opacity: 1;
-  }
+.progressFill {
+  width: 0;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, rgba(146, 166, 255, 0.9), rgba(45, 212, 191, 0.95));
+  transition: width 120ms linear;
 }
 
 @keyframes pulseGlow {
@@ -251,11 +259,6 @@ body {
   color: var(--text);
   font-size: 13px;
   letter-spacing: 0.01em;
-}
-
-.status.thinking::after {
-  content: " ...";
-  color: var(--muted);
 }
 
 .verdictRow {
@@ -439,6 +442,29 @@ body {
   background: rgba(255, 255, 255, 0.035);
 }
 
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+}
+
+.iconButton svg {
+  width: 15px;
+  height: 15px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.iconButton:hover {
+  color: var(--text);
+}
+
 .modeButton.active {
   border-color: rgba(146, 166, 255, 0.55);
   background: linear-gradient(135deg, rgba(115, 137, 255, 0.42), rgba(92, 109, 217, 0.25));
@@ -464,14 +490,6 @@ body {
   margin-left: auto;
   color: var(--subtle);
   font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-
-.timingBreakdown {
-  margin: -4px 4px 0;
-  color: var(--subtle);
-  font-size: 10px;
-  line-height: 1.5;
   font-variant-numeric: tabular-nums;
 }
 
@@ -635,19 +653,4 @@ body {
 
 .evidenceItem.irrelevant {
   opacity: 0.55;
-}
-
-@media (max-width: 380px) {
-  .header {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .modeSwitcher {
-    width: 100%;
-  }
-
-  .modeButton {
-    flex: 1;
-  }
 }

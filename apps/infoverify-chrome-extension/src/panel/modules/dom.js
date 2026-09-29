@@ -1,9 +1,12 @@
 // ---------- Cached references to the panel's DOM elements ----------
 export const statusEl = document.getElementById("status");
 export const elapsedEl = document.getElementById("elapsed");
-export const timingBreakdownEl = document.getElementById("timingBreakdown");
 export const thinkingBannerEl = document.getElementById("thinkingBanner");
 export const thinkingTextEl = document.getElementById("thinkingText");
+export const thinkingStepEl = document.getElementById("thinkingStep");
+export const thinkingElapsedEl = document.getElementById("thinkingElapsed");
+export const progressTrackEl = document.getElementById("progressTrack");
+export const progressFillEl = document.getElementById("progressFill");
 export const verdictPillEl = document.getElementById("verdictPill");
 export const confidenceEl = document.getElementById("confidence");
 export const summaryEl = document.getElementById("summary");
@@ -24,6 +27,6 @@ export const googleNewsQueryEl = document.getElementById("googleNewsQuery");
 export const newsQueryLabelEl = document.getElementById("newsQueryLabel");
 export const newsSummaryLabelEl = document.getElementById("newsSummaryLabel");
 export const modePillEl = document.getElementById("modePill");
-export const localModeButtonEl = document.getElementById("localModeButton");
-export const cloudModeButtonEl = document.getElementById("cloudModeButton");
+export const rerunButtonEl = document.getElementById("rerunButton");
+export const settingsButtonEl = document.getElementById("settingsButton");
 export const downloadModelButtonEl = document.getElementById("downloadModelButton");

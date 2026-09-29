@@ -16,10 +16,14 @@
         <div class="subtitle">Local AI with Google News cross-validation, or bring-your-own-key cloud AI with web search.</div>
       </div>
 
-      <div class="modeSwitcher" role="group" aria-label="Analysis action">
+      <div class="modeSwitcher" role="group" aria-label="Panel actions">
         <button class="modeButton" id="downloadModelButton" type="button" hidden>Download local AI</button>
-        <button class="modeButton active" id="localModeButton" type="button">Local AI</button>
-        <button class="modeButton" id="cloudModeButton" type="button">Cloud AI</button>
+        <button class="modeButton iconButton" id="rerunButton" type="button" aria-label="Re-check selection" title="Re-check the current selection with the current settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66"/><path d="M20 4v5h-5"/></svg>
+        </button>
+        <button class="modeButton iconButton" id="settingsButton" type="button" aria-label="Settings" title="Settings: analysis mode, output language, Cloud AI key">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09a1.65 1.65 0 0 0-1.08-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09a1.65 1.65 0 0 0 1.51-1.08 1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        </button>
       </div>
     </header>
 
@@ -27,13 +31,15 @@
       <section class="thinkingBanner" id="thinkingBanner" aria-live="polite">
         <div class="thinkingGlow"></div>
         <div class="thinkingContent">
-          <div class="thinkingLabel">Thinking</div>
+          <div class="thinkingHeader">
+            <span class="thinkingLabel">Thinking</span>
+            <span class="thinkingStep" id="thinkingStep"></span>
+            <span class="thinkingElapsed" id="thinkingElapsed">0.0s</span>
+          </div>
           <div class="thinkingText" id="thinkingText">Analyzing...</div>
-        </div>
-        <div class="thinkingBars" aria-hidden="true">
-          <span></span>
-          <span></span>
-          <span></span>
+          <div class="progressTrack" id="progressTrack" role="progressbar" aria-label="Verification progress" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+            <div class="progressFill" id="progressFill"></div>
+          </div>
         </div>
       </section>
 
@@ -41,7 +47,6 @@
         <span class="status" id="status">Ready</span>
         <span class="elapsed" id="elapsed"></span>
       </div>
-      <div class="timingBreakdown" id="timingBreakdown" hidden></div>
 
       <section class="card conclusionCard">
         <div class="cardTitle">Conclusion</div>
@@ -54,16 +59,6 @@
           <div class="conclusionReasonLabel">Why</div>
           <div class="summary conclusionReasonText" id="rationale">—</div>
         </div>
-      </section>
-
-      <section class="card principleCard">
-        <div class="cardTitle">Reproducibility</div>
-        <div class="principleRow">
-          <div class="principleLabel">Score</div>
-          <div class="principleValue" id="reproScore">—</div>
-        </div>
-        <div class="summary principleNote" id="reproSummary">—</div>
-        <div class="summary principleNote modelNote" id="reproNote">—</div>
       </section>
 
       <section class="card principleCard crossValidationCard">
@@ -81,6 +76,17 @@
         <div class="summary principleNote" id="googleNewsSummary">—</div>
         <div class="summary principleNote modelNote" id="crossNote">—</div>
       </section>
+
+      <section class="card principleCard">
+        <div class="cardTitle">Reproducibility</div>
+        <div class="principleRow">
+          <div class="principleLabel">Score</div>
+          <div class="principleValue" id="reproScore">—</div>
+        </div>
+        <div class="summary principleNote" id="reproSummary">—</div>
+        <div class="summary principleNote modelNote" id="reproNote">—</div>
+      </section>
+
 
       <section class="card principleCard">
         <div class="cardTitle">Detail Specificity</div>

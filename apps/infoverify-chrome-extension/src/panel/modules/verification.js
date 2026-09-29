@@ -3,7 +3,7 @@ import { state } from "./state.js";
 import { reportError } from "./logging.js";
 import { formatError } from "./utils.js";
 import {
-  updateModeButtons,
+  updateModePill,
   setLoading,
   resetResultsView,
   renderVerification,
@@ -17,19 +17,25 @@ function resolveMode(value) {
   return value === "cloud" ? "cloud" : "local";
 }
 
+// The analysis mode chosen on the Options page ("local" by default).
+export async function getPreferredAnalysisMode() {
+  const { analysisMode = "local" } = await chrome.storage.sync.get({ analysisMode: "local" });
+  return resolveMode(analysisMode);
+}
+
 export async function hydrateInitialState() {
   const { currentVerification: stored } = await chrome.storage.session.get({
     currentVerification: null
   });
 
   if (!stored) {
-    updateModeButtons();
+    updateModePill(await getPreferredAnalysisMode());
     return;
   }
 
   state.currentVerification = { ...stored };
   const storedMode = resolveMode(stored.result?.mode || stored.mode);
-  updateModeButtons(storedMode);
+  updateModePill(storedMode);
 
   if (stored.state === "loading" && stored.input) {
     await startVerification({ ...stored });
@@ -41,9 +47,10 @@ export async function hydrateInitialState() {
   }
 }
 
+// Re-checks the current selection. Returns false when there is nothing to check.
 export async function requestRun(mode = "local") {
   const input = state.currentVerification?.input;
-  if (!input) return;
+  if (!input) return false;
 
   const runId = crypto.randomUUID();
   const verification = {
@@ -57,6 +64,7 @@ export async function requestRun(mode = "local") {
   await chrome.storage.session.set({ currentVerification: verification });
   state.currentVerification = verification;
   await startVerification(verification);
+  return true;
 }
 
 export async function startVerification(verification) {

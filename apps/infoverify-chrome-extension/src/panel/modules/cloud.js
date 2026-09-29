@@ -1,6 +1,6 @@
 // ---------- Cloud AI (BYOK) orchestration: Google Gemini + Google Search grounding ----------
-import { GEMINI_API_BASE, GEMINI_DEFAULT_MODEL, SUPPORTED_OUTPUT_LANGUAGES } from "./constants.js";
-import { reportError, setStatus } from "./logging.js";
+import { GEMINI_ORIGIN, GEMINI_API_BASE, GEMINI_DEFAULT_MODEL, SUPPORTED_OUTPUT_LANGUAGES } from "./constants.js";
+import { reportError } from "./logging.js";
 import { getAnalysisText, sanitizeModelText, safeReadText } from "./utils.js";
 import { getPreferredOutputLanguage, getLanguageLabel } from "./language.js";
 import { lookupMbfcEntry, normalizeHostname } from "./mbfc.js";
@@ -29,11 +29,6 @@ export async function getCloudConfig() {
     apiKey: String(cloudApiKey || "").trim(),
     model: String(cloudModel || "").trim() || GEMINI_DEFAULT_MODEL
   };
-}
-
-export async function isCloudConfigured() {
-  const { apiKey } = await getCloudConfig();
-  return Boolean(apiKey);
 }
 
 // Resolves the language instruction for Gemini. When the user picked a specific
@@ -165,6 +160,9 @@ export async function runCloudAnalysis(input, signal) {
   if (!config.apiKey) {
     throw new Error("Add your Gemini API key in Settings to use Cloud AI.");
   }
+  if (!(await chrome.permissions.contains({ origins: [GEMINI_ORIGIN] }))) {
+    throw new Error("Cloud AI needs permission to connect to the Gemini API. Select Cloud AI again in Settings to grant it.");
+  }
 
   // Gemini handles the source language natively, so we send the text verbatim
   // (no local detection/translation). `outputLanguage` is still resolved for the
@@ -174,7 +172,6 @@ export async function runCloudAnalysis(input, signal) {
   const analysisText = getAnalysisText(input);
   const prompt = buildCloudPrompt(input, analysisText, language);
 
-  setStatus("Calling cloud AI (Gemini)...");
   const { text, sources, searchQueries } = await callGemini(config, prompt, signal);
 
   const mbfcEntry = await lookupMbfcEntry(input.url || "");

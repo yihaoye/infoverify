@@ -10,6 +10,7 @@ export const googleNewsCacheTtlMs = 15 * 60 * 1000;
 
 // ---------- Cloud AI (BYOK) defaults ----------
 // Only Google Gemini is supported for now. The model is user-editable in Options.
+export const GEMINI_ORIGIN = "https://generativelanguage.googleapis.com/*";
 export const GEMINI_API_BASE = "https://generativelanguage.googleapis.com/v1beta/models";
 export const GEMINI_DEFAULT_MODEL = "gemini-2.5-flash";
 
