@@ -6,7 +6,8 @@ import {
   updateModeButtons,
   setLoading,
   resetResultsView,
-  renderVerification
+  renderVerification,
+  renderPreview
 } from "./render.js";
 import { runLocalAnalysis } from "./analysis.js";
 import { runCloudAnalysis } from "./cloud.js";
@@ -83,15 +84,25 @@ export async function startVerification(verification) {
 
   setLoading(true, mode);
   resetResultsView(mode);
+  const startedAt = performance.now();
 
   try {
     const payload = mode === "cloud"
       ? await runCloudAnalysis(state.currentVerification.input, controller.signal)
-      : await runLocalAnalysis(state.currentVerification.input, controller.signal);
+      : await runLocalAnalysis(state.currentVerification.input, controller.signal, {
+          onPreview: (preview) => {
+            if (controller.signal.aborted || state.activeRun.id !== state.currentVerification.runId) return;
+            renderPreview(normalizeResult(preview, mode, state.currentVerification.input), !preview.summary);
+          }
+        });
 
     if (controller.signal.aborted || state.activeRun.id !== state.currentVerification.runId) return;
 
-    const result = normalizeResult(payload, state.activeRun.mode, state.currentVerification.input);
+    const result = normalizeResult(
+      { ...payload, elapsed_ms: performance.now() - startedAt },
+      state.activeRun.mode,
+      state.currentVerification.input
+    );
     state.currentVerification = {
       ...state.currentVerification,
       state: "done",
@@ -113,6 +124,7 @@ export async function startVerification(verification) {
       mode: state.activeRun.mode,
       message: formatError(err)
     });
+    result.elapsed_ms = performance.now() - startedAt;
     state.currentVerification = {
       ...state.currentVerification,
       state: "done",

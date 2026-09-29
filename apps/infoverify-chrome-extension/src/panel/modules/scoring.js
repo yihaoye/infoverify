@@ -23,11 +23,8 @@ export function buildDeterministicLocalAssessment(input, newsBundle, mbfcEntry, 
     summary: rationale,
     rationale,
     rule_scores,
-    rule_notes: {
-      reproducibility: buildReproducibilitySummary(newsBundle, mbfcEntry, outputLanguage),
-      cross_validation: buildCrossValidationSummary(newsBundle, outputLanguage),
-      detail_richness: buildSpecificitySummary(input, outputLanguage)
-    },
+    // The same rule summaries are already shown in each card; no separate note.
+    rule_notes: null,
     evidence: mergeEvidenceLists(buildFallbackEvidence(input), newsBundle.items, input),
     news_query: newsBundle.query || "",
     news_summary: newsBundle.summary,

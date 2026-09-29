@@ -3,6 +3,8 @@ import { minLoadingMs } from "./constants.js";
 import { state } from "./state.js";
 import {
   statusEl,
+  elapsedEl,
+  timingBreakdownEl,
   thinkingBannerEl,
   thinkingTextEl,
   verdictPillEl,
@@ -47,6 +49,7 @@ export function setLoading(loading, mode = "local") {
       state.loadingHideTimer = 0;
     }
     state.loadingStartAt = performance.now();
+    startElapsedCounter();
     thinkingBannerEl.classList.add("active");
     if (statusEl) {
       statusEl.classList.add("thinking");
@@ -59,6 +62,7 @@ export function setLoading(loading, mode = "local") {
     return;
   }
 
+  stopElapsedCounter();
   const elapsed = performance.now() - state.loadingStartAt;
   const remaining = Math.max(0, minLoadingMs - elapsed);
   state.loadingHideTimer = window.setTimeout(() => {
@@ -69,6 +73,62 @@ export function setLoading(loading, mode = "local") {
     thinkingTextEl.textContent = "Done";
     state.loadingHideTimer = 0;
   }, remaining);
+}
+
+const STAGE_LABELS = {
+  session: "Load model",
+  inputTranslation: "Translate input",
+  searchQuery: "AI search terms",
+  newsFetch: "Google News",
+  modelPrompt: "AI analysis",
+  outputTranslation: "Translate output"
+};
+
+function formatSeconds(ms) {
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+// Live run clock next to the status line.
+function startElapsedCounter() {
+  stopElapsedCounter();
+  timingBreakdownEl.hidden = true;
+  const tick = () => {
+    elapsedEl.textContent = formatSeconds(performance.now() - state.loadingStartAt);
+  };
+  tick();
+  state.elapsedTimer = window.setInterval(tick, 100);
+}
+
+function stopElapsedCounter() {
+  if (state.elapsedTimer) {
+    window.clearInterval(state.elapsedTimer);
+    state.elapsedTimer = 0;
+  }
+}
+
+// e.g. " (first token 3.1s · 1240 chars out)": separates prompt
+// processing (time to first token) from output generation.
+function formatModelStats(stats) {
+  if (!stats) return "";
+  const parts = [];
+  if (Number.isFinite(stats.firstTokenMs)) parts.push(`first token ${formatSeconds(stats.firstTokenMs)}`);
+  if (Number.isFinite(stats.outputChars)) parts.push(`${stats.outputChars} chars out`);
+  return parts.length ? ` (${parts.join(" · ")})` : "";
+}
+
+// Total run time plus a per-stage breakdown (local mode only), to show where
+// the wait goes. Stages under 50 ms are omitted as noise.
+function renderTimings(payload) {
+  elapsedEl.textContent = payload.elapsed_ms ? formatSeconds(payload.elapsed_ms) : "";
+  const timings = payload.timings || {};
+  const stages = Object.entries(timings)
+    .filter(([name, ms]) => STAGE_LABELS[name] && ms >= 50)
+    .map(([name, ms]) => {
+      const label = `${STAGE_LABELS[name]} ${formatSeconds(ms)}`;
+      return name === "modelPrompt" ? `${label}${formatModelStats(timings.model)}` : label;
+    });
+  timingBreakdownEl.textContent = stages.join(" · ");
+  timingBreakdownEl.hidden = stages.length === 0;
 }
 
 // Clears the result cards back to their placeholder state at the start of a run.
@@ -86,10 +146,24 @@ export function resetResultsView(mode = "local") {
 }
 
 export function renderVerification(payload) {
-  const mode = payload?.mode === "cloud" ? "cloud" : "local";
-  updateModeButtons(mode);
   setLoading(false);
   setStatus("Done");
+  renderTimings(payload);
+  renderResultCards(payload);
+}
+
+// Provisional result while the model is still writing the summary. The loading
+// banner and live clock keep running until renderVerification.
+// `summaryPending`: no summary text has streamed in yet.
+export function renderPreview(payload, summaryPending = false) {
+  setStatus("Writing summary");
+  renderResultCards(payload);
+  if (summaryPending) summaryEl.textContent = "…";
+}
+
+function renderResultCards(payload) {
+  const mode = payload?.mode === "cloud" ? "cloud" : "local";
+  updateModeButtons(mode);
   setVerdict(payload.verdict, payload.confidence);
   summaryEl.textContent = payload.summary || "—";
   const rationale = String(payload.rationale || "").trim();
@@ -118,9 +192,15 @@ export function renderRuleScores(ruleScores, ruleNotes, extraContext = {}) {
   crossSummaryEl.textContent = extraContext.cross_validation || "—";
   detailSummaryEl.textContent = extraContext.specificity || "—";
 
-  reproNoteEl.textContent = ruleNotes?.reproducibility || "—";
-  crossNoteEl.textContent = ruleNotes?.cross_validation || "—";
-  detailNoteEl.textContent = ruleNotes?.detail_richness || "—";
+  // Model-written notes only exist in cloud mode; hide the box otherwise.
+  setNote(reproNoteEl, ruleNotes?.reproducibility);
+  setNote(crossNoteEl, ruleNotes?.cross_validation);
+  setNote(detailNoteEl, ruleNotes?.detail_richness);
+}
+
+function setNote(el, text) {
+  el.textContent = text || "";
+  el.hidden = !text;
 }
 
 export function setVerdict(verdict, confidence) {

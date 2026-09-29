@@ -2,12 +2,14 @@
 import { getPreferredOutputLanguage, resolveModelOutputLanguage } from "./language.js";
 
 // The model accepts English input; output language is hinted from the user's
-// preference. These hints select the same underlying model, so a download
-// triggered for one language combination satisfies the others too.
+// preference. English output is always declared too, because the same session
+// first writes the English Google News query. These hints select the same
+// underlying model, so a download triggered for one language combination
+// satisfies the others too.
 function modelCapabilities(modelOutputLanguage) {
   return {
     expectedInputs: [{ type: "text", languages: ["en"] }],
-    expectedOutputs: [{ type: "text", languages: [modelOutputLanguage] }]
+    expectedOutputs: [{ type: "text", languages: [...new Set(["en", modelOutputLanguage])] }]
   };
 }
 

@@ -5,7 +5,11 @@ import { resolveOutputLanguage } from "./language.js";
 import { normalizeHostname } from "./mbfc.js";
 import { safeReadText, sanitizeModelText } from "./utils.js";
 
-export async function fetchGoogleNewsBundle(input, signal, outputLanguage = "en") {
+// `session` is the run's local AI session, reused for query generation so the
+// claim is already in its context for the later analysis prompt.
+// `onQueryReady({ source, claimInContext })` fires once the query exists, so
+// callers can time query generation separately from the RSS fetch.
+export async function fetchGoogleNewsBundle(input, signal, outputLanguage = "en", { session = null, onQueryReady } = {}) {
   if (!(await hasGoogleNewsPermission(input))) {
     const errorMessage = "Google News access was not granted.";
     const anchorDate = extractAnchorDate(input);
@@ -18,9 +22,9 @@ export async function fetchGoogleNewsBundle(input, signal, outputLanguage = "en"
     };
   }
 
-  const queries = await buildGoogleNewsQueries(input, signal);
+  const { query, source, claimInContext } = await buildGoogleNewsQuery(input, signal, session);
+  onQueryReady?.({ source, claimInContext });
   const anchorDate = extractAnchorDate(input);
-  const query = queries[0] || "";
   if (!query) {
     return {
       query: "",
@@ -274,64 +278,88 @@ export function getItemDate(item) {
   return 0;
 }
 
-export async function buildGoogleNewsQueries(input, signal) {
-  const promptQuery = await buildPromptDrivenGoogleNewsQuery(input, signal);
-  return promptQuery ? [promptQuery] : [];
+// Max tokens kept in a search query (also enforced by cleanGoogleNewsQuery).
+const MAX_QUERY_TOKENS = 8;
+// Model input cap for query generation; longer claims are not left in context.
+const MAX_QUERY_PROMPT_CHARS = 2000;
+
+// English function words dropped from rule-based queries. The claim has already
+// been translated to English when possible (see prepareEnglishAnalysisInput).
+const QUERY_STOPWORDS = new Set((
+  "the and for are was were been being has have had does did not but with from that this these those " +
+  "than then into onto over under about after before while when where which who whom whose what why how " +
+  "its it's his her hers their theirs our ours your yours they them she him you can could will would " +
+  "shall should may might must also just only very more most such some any each every all both other " +
+  "said says say according reported reports reportedly report there here out off per via upon amid"
+).split(" "));
+
+// Content words of `text` in order, deduplicated, or null when the text is not
+// in a Latin script (e.g. untranslated Chinese has no spaces to split on).
+function contentTokens(text) {
+  const normalized = String(text || "").normalize("NFKC");
+  if (/[^\p{Script=Latin}\p{N}\p{P}\p{S}\s]/u.test(normalized)) return null;
+  const tokens = cleanGoogleNewsQuery(normalized, Infinity).split(" ").filter(Boolean);
+  return tokens.filter((token) => !QUERY_STOPWORDS.has(token.toLowerCase()));
 }
 
-export async function buildPromptDrivenGoogleNewsQuery(input, signal) {
+// Returns { query, source: "rule" | "model" | "none", claimInContext }.
+//
+// A selection that already fits in one query after dropping stopwords is used
+// as-is: summarizing it with the model would cost seconds for no gain. Longer
+// claims need the model to pick out the main statement. Without a model the
+// first content words are used rather than skipping the news search.
+export async function buildGoogleNewsQuery(input, signal, session) {
   // The user's selection is the claim to verify. Page text is intentionally not
   // captured or used, so the query stays focused on the chosen statement.
   const claim = String(input?.selectionText || "").trim()
     || String(input?.analysisText || "").trim();
+  if (!claim) return { query: "", source: "none", claimInContext: false };
+
+  const tokens = contentTokens(claim);
+  if (tokens && tokens.length > 0 && tokens.length <= MAX_QUERY_TOKENS) {
+    return { query: tokens.join(" "), source: "rule", claimInContext: false };
+  }
+
+  if (session) {
+    const query = await buildPromptDrivenGoogleNewsQuery(input, claim, signal, session);
+    if (query.text) return { query: query.text, source: "model", claimInContext: query.claimInContext };
+  }
+
+  const fallback = (tokens || []).slice(0, MAX_QUERY_TOKENS).join(" ");
+  return { query: fallback, source: fallback ? "rule" : "none", claimInContext: false };
+}
+
+// Runs on the shared analysis session (not a throwaway one): the claim text
+// sent here stays in the session context, so the analysis prompt can refer to
+// it instead of sending it again. `claimInContext` is only true when the whole
+// claim fit, so the analysis never judges a truncated claim.
+async function buildPromptDrivenGoogleNewsQuery(input, claim, signal, session) {
   const title = String(input?.title || "").trim();
-  const text = [claim, title]
-    .filter(Boolean)
-    .join("\n\n")
-    .trim()
-    .slice(0, 2000);
+  const fullText = [claim, title].filter(Boolean).join("\n\n").trim();
+  const text = fullText.slice(0, MAX_QUERY_PROMPT_CHARS);
 
-  if (!text) return "";
+  const queryPrompt = [
+    "You are creating a news search query to fact-check a specific claim.",
+    "From the text below, identify the SINGLE main claim it is making — usually the first or most prominent statement — and ignore secondary, background, or example details mentioned later.",
+    "Output one short English search query (4 to 8 words) using only the key searchable terms of that main claim: its core subject, organizations, products, locations, dates, numbers, and the main action.",
+    "If the main subject is unnamed (for example 'an unnamed company'), do NOT switch to a different, named topic from a later sentence; instead use the other concrete terms of the main claim, such as the product, the amount, or the reporting outlet.",
+    "Return only the query string: no explanation, no markdown, no quotes, and no bullets.",
+    "Avoid filler words and avoid tokens shorter than 3 characters.",
+    "Claim text:",
+    text
+  ].join("\n");
 
-  const api = globalThis.LanguageModel;
-  if (!api) return "";
-
-  let session = null;
   try {
-    const availability = await api.availability({
-      expectedInputs: [{ type: "text", languages: ["en"] }],
-      expectedOutputs: [{ type: "text", languages: ["en"] }]
-    });
-    if (availability === "unavailable") return "";
-
-    session = await api.create({
-      expectedInputs: [{ type: "text", languages: ["en"] }],
-      expectedOutputs: [{ type: "text", languages: ["en"] }],
-      signal
-    });
-
-    const queryPrompt = [
-      "You are creating a news search query to fact-check a specific claim.",
-      "From the text below, identify the SINGLE main claim it is making — usually the first or most prominent statement — and ignore secondary, background, or example details mentioned later.",
-      "Output one short English search query (4 to 8 words) using only the key searchable terms of that main claim: its core subject, organizations, products, locations, dates, numbers, and the main action.",
-      "If the main subject is unnamed (for example 'an unnamed company'), do NOT switch to a different, named topic from a later sentence; instead use the other concrete terms of the main claim, such as the product, the amount, or the reporting outlet.",
-      "Return only the query string: no explanation, no markdown, no quotes, and no bullets.",
-      "Avoid filler words and avoid tokens shorter than 3 characters.",
-      "Claim text:",
-      text
-    ].join("\n");
-
     const raw = sanitizeModelText(await session.prompt(queryPrompt, { signal }));
-    return cleanGoogleNewsQuery(raw);
+    return { text: cleanGoogleNewsQuery(raw), claimInContext: fullText.length <= MAX_QUERY_PROMPT_CHARS };
   } catch (err) {
+    if (signal?.aborted || err?.name === "AbortError") throw err;
     reportError("Google News query generation", err);
-    return "";
-  } finally {
-    session?.destroy?.();
+    return { text: "", claimInContext: false };
   }
 }
 
-export function cleanGoogleNewsQuery(value) {
+export function cleanGoogleNewsQuery(value, maxTokens = MAX_QUERY_TOKENS) {
   const normalized = String(value || "")
     .normalize("NFKC")
     .replace(/["'`]/g, " ")
@@ -355,7 +383,7 @@ export function cleanGoogleNewsQuery(value) {
     if (seen.has(key)) continue;
     seen.add(key);
     tokens.push(token);
-    if (tokens.length >= 8) break;
+    if (tokens.length >= maxTokens) break;
   }
   return tokens.join(" ").trim();
 }

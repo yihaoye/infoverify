@@ -1,5 +1,7 @@
 // ---------- Cached references to the panel's DOM elements ----------
 export const statusEl = document.getElementById("status");
+export const elapsedEl = document.getElementById("elapsed");
+export const timingBreakdownEl = document.getElementById("timingBreakdown");
 export const thinkingBannerEl = document.getElementById("thinkingBanner");
 export const thinkingTextEl = document.getElementById("thinkingText");
 export const verdictPillEl = document.getElementById("verdictPill");

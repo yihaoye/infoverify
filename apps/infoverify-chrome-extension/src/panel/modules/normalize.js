@@ -16,7 +16,9 @@ export function normalizeResult(payload, mode, input) {
     news_summary: String(payload?.news_summary || ""),
     reproducibility_summary: String(payload?.reproducibility_summary || ""),
     cross_validation_summary: String(payload?.cross_validation_summary || ""),
-    specificity_summary: String(payload?.specificity_summary || "")
+    specificity_summary: String(payload?.specificity_summary || ""),
+    timings: payload?.timings && typeof payload.timings === "object" ? payload.timings : null,
+    elapsed_ms: Number(payload?.elapsed_ms) || 0
   };
 
   return result;
@@ -128,4 +130,40 @@ export function parseAssessmentJson(raw) {
   } catch {
     return null;
   }
+}
+
+// Reads the fields that are already complete in a partially streamed model
+// response. The prompt orders them stances → specificity → verdict → summary,
+// so `ready` (everything except the summary is known) becomes true before the
+// summary text starts, and `summary` then grows chunk by chunk.
+export function extractStreamingAssessment(text) {
+  const raw = String(text || "");
+  const stancesMatch = raw.match(/"stances"\s*:\s*\[([^\]]*)\]/);
+  const specificityMatch = raw.match(/"specificity"\s*:\s*(-?\d+(?:\.\d+)?)\s*[,}]/);
+  const verdictMatch = raw.match(/"verdict"\s*:\s*"([a-z]+)"/i);
+  const summaryMatch = raw.match(/"summary"\s*:\s*"((?:[^"\\]|\\.)*)/);
+
+  const stances = stancesMatch
+    ? [...stancesMatch[1].matchAll(/"([a-z]+)"/gi)].map((match) => match[1].toLowerCase())
+    : null;
+  return {
+    ready: Boolean(stancesMatch && specificityMatch && verdictMatch),
+    stances,
+    specificity: specificityMatch ? Number(specificityMatch[1]) : null,
+    verdict: verdictMatch ? verdictMatch[1].toLowerCase() : "",
+    summary: summaryMatch ? decodePartialJsonString(summaryMatch[1]) : ""
+  };
+}
+
+// Decodes a JSON string body that may be cut mid-escape (e.g. ends with "\").
+function decodePartialJsonString(body) {
+  let value = body;
+  while (value) {
+    try {
+      return JSON.parse(`"${value}"`);
+    } catch {
+      value = value.slice(0, -1);
+    }
+  }
+  return "";
 }
