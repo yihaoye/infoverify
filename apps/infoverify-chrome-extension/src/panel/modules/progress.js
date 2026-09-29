@@ -1,6 +1,12 @@
 // ---------- Stage-based progress bar in the "Thinking" banner ----------
 import { state } from "./state.js";
-import { thinkingTextEl, thinkingStepEl, thinkingElapsedEl, progressTrackEl, progressFillEl } from "./dom.js";
+import {
+  thinkingTextEl,
+  thinkingStepEl,
+  thinkingElapsedEl,
+  progressTrackEl,
+  progressFillEl
+} from "./dom.js";
 
 // Expected durations (ms) are weights, roughly measured on a MacBook Air M4
 // with the GPU model. They only shape the bar; stages end when the pipeline

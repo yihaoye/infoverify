@@ -73,12 +73,6 @@ export function averageRuleScores(ruleScores) {
   return values.reduce((sum, value) => sum + value, 0) / values.length;
 }
 
-// A low score only means weak evidence, so it maps to "unclear". "contradicted"
-// needs contradicting evidence or a model judgement (see assessVerdict).
-export function verdictFromScore(score) {
-  return score >= 0.7 ? "supported" : "unclear";
-}
-
 export function formatScore(score) {
   if (typeof score !== "number" || !Number.isFinite(score)) return "—";
   return `${Math.round(score * 100)}%`;

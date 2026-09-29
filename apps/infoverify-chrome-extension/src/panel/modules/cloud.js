@@ -2,21 +2,16 @@
 import { GEMINI_ORIGIN, GEMINI_API_BASE, GEMINI_DEFAULT_MODEL, SUPPORTED_OUTPUT_LANGUAGES } from "./constants.js";
 import { reportError } from "./logging.js";
 import { getAnalysisText, sanitizeModelText, safeReadText } from "./utils.js";
-import { getPreferredOutputLanguage, getLanguageLabel } from "./language.js";
-import { lookupMbfcEntry, normalizeHostname } from "./mbfc.js";
-import { buildSpecificitySummary } from "./summaries.js";
-import { buildDeterministicRuleScores } from "./scoring.js";
-import { mergeEvidenceLists } from "./evidence.js";
+import { getPreferredOutputLanguage, getLanguageLabel, resolveOutputLanguage } from "./language.js";
+import { lookupMbfcEntry, normalizeHostname, annotateSourceCredibility } from "./mbfc.js";
 import {
-  normalizeRuleScores,
-  normalizeRuleNotes,
-  normalizeConfidence,
-  normalizeVerdict,
-  normalizeEvidence,
-  verdictFromScore,
-  averageRuleScores,
-  parseAssessmentJson
-} from "./normalize.js";
+  buildReproducibilitySummary,
+  buildCrossValidationSummary,
+  buildSpecificitySummary
+} from "./summaries.js";
+import { buildDeterministicRuleScores, assessVerdict } from "./scoring.js";
+import { mergeEvidenceLists } from "./evidence.js";
+import { normalizeRuleNotes, parseAssessmentJson } from "./normalize.js";
 
 // The API key and model are stored in chrome.storage.local (never sync) so the
 // secret stays on this device. See the Options page and PRIVACY.md.
@@ -39,42 +34,49 @@ async function resolveCloudLanguage() {
   const { outputLanguage = "auto" } = await chrome.storage.sync.get({ outputLanguage: "auto" });
   const pref = String(outputLanguage || "auto").toLowerCase();
   if (SUPPORTED_OUTPUT_LANGUAGES.has(pref)) {
-    const label = getLanguageLabel(pref);
-    return {
-      langName: label,
-      instruction: `Write the entire final answer (summary, rationale, and rule_notes) in ${label}.`
-    };
+    return { instruction: `Write summary and rule_notes in ${getLanguageLabel(pref)}.` };
   }
   return {
-    langName: "the same language as the claim",
-    instruction: "Detect the primary language of the claim text below and write the entire final answer (summary, rationale, and rule_notes) in that same language."
+    instruction: "Detect the primary language of the claim text below and write summary and rule_notes in that same language."
   };
 }
 
+// Same contract as the local prompt (stances → specificity → verdict →
+// summary), except Gemini finds its own sources with Google Search, so it lists
+// them with a stance each instead of labeling a numbered list. Scores and the
+// final verdict are computed by the shared rules, not taken from Gemini.
 function buildCloudPrompt(input, analysisText, language) {
-  const outputLanguageLabel = language.langName;
   return [
     "You are an information verification assistant with web search.",
-    "Use Google Search to find independent, reputable sources that corroborate or contradict the claim before answering.",
+    "Use Google Search to find independent, reputable sources that report on the claim before answering. Do not use the page under review as a source.",
     language.instruction,
-    "Evaluate the statement using three principles:",
-    "1) Specificity: judge the density and falsifiability of the claim itself — DIKW depth, 5W1H completeness, relevance between numbers and conclusions, precision of details, and low information entropy.",
-    "2) Cross-validation: judge whether independent web sources support the claim. Prefer multiple reputable, independent domains; note disagreement.",
-    "3) Reproducibility: judge the claim's stability over time and the credibility of the sources you found.",
-    "Return ONLY valid JSON with these keys:",
-    `{ "verdict": "supported|contradicted|unclear", "confidence": 0.0, "overall_score": 0.0, "summary": "short ${outputLanguageLabel} summary", "rationale": "short ${outputLanguageLabel} explanation", "rule_scores": {"reproducibility": 0.0, "cross_validation": 0.0, "detail_richness": 0.0}, "rule_notes": {"reproducibility": "...", "cross_validation": "...", "detail_richness": "..."}, "evidence": [{"title":"...", "url":"...", "quote":"..."}] }`,
-    "Rules:",
-    "- The verdict must reflect the claim's overall credibility.",
-    "- confidence, overall_score, and every rule_score must be numbers between 0 and 1.",
-    "- evidence must cite the actual web pages you found (real URLs and near-exact quotes), not the page under review.",
-    "- rule_notes should briefly justify each score and reference the sources you used.",
-    "- If the claim is too weak, too vague, or cannot be verified, return unclear.",
+    "Tasks:",
+    `1) sources: up to ${MAX_CLOUD_SOURCES} distinct publishers you actually found. For each: publisher name, the publisher's website domain (e.g. reuters.com), the article URL, its publication date (YYYY-MM-DD, or "" if unknown), and stance. "support" = it reports the same claim as true; "contradict" = it denies, debunks, or reports conflicting facts; "irrelevant" = a different event or topic. Sharing keywords is not support.`,
+    "2) specificity: 0 to 1, how concrete and falsifiable the claim is (who/what/when/where, precise numbers that actually back the conclusion, little vagueness).",
+    "3) verdict: supported, contradicted, or unclear, based on your sources above. Use unclear when the evidence is thin, mixed, or off-topic.",
+    "Return ONLY one compact JSON object:",
+    `{"sources":[{"publisher":"...","domain":"...","url":"...","date":"YYYY-MM-DD","stance":"support|contradict|irrelevant"}],"specificity":0.0,"verdict":"supported|contradicted|unclear","summary":"...","rule_notes":{"reproducibility":"...","cross_validation":"...","detail_richness":"..."}}`,
+    "summary: one or two sentences explaining the verdict, naming the publishers that support or contradict it. rule_notes briefly justify: reproducibility = stability over time and source credibility; cross_validation = which publishers support or contradict; detail_richness = specificity.",
     "",
     `URL: ${input.url || ""}`,
     `Title: ${input.title || ""}`,
-    "Selected text to verify:",
+    "Claim to verify:",
     analysisText || input.selectionText || ""
   ].join("\n");
+}
+
+const MAX_CLOUD_SOURCES = 6;
+
+// Grounding chunk URIs are Google redirect links, so the publisher is read from
+// the chunk title (usually its domain, e.g. "reuters.com"), falling back to the
+// URI's host when that is not a redirect.
+const HOSTNAME_PATTERN = /^(?:[a-z0-9-]+\.)+[a-z]{2,}$/i;
+
+function groundedDomain(web) {
+  const title = String(web?.title || "").trim().toLowerCase();
+  if (HOSTNAME_PATTERN.test(title)) return normalizeHostname(title);
+  const host = normalizeHostname(web?.uri || "");
+  return host.endsWith("vertexaisearch.cloud.google.com") ? "" : host;
 }
 
 async function callGemini({ apiKey, model }, prompt, signal) {
@@ -114,45 +116,68 @@ async function callGemini({ apiKey, model }, prompt, signal) {
     .trim();
 
   const grounding = candidate?.groundingMetadata || {};
-  const sources = (grounding.groundingChunks || [])
+  const grounded = (grounding.groundingChunks || [])
     .map((chunk) => chunk?.web)
     .filter(Boolean)
     .map((web) => ({
       title: String(web.title || web.uri || "Source").trim(),
       url: String(web.uri || "").trim(),
-      // Common evidence fields let the deterministic scorer reuse grounded sources.
-      domain: normalizeHostname(web.uri || web.title || ""),
+      domain: groundedDomain(web),
+      source: String(web.title || "").trim(),
       quote: "",
       retrieved_at: "",
       source_type: "web"
     }));
   const searchQueries = Array.isArray(grounding.webSearchQueries) ? grounding.webSearchQueries : [];
 
-  return { text, sources, searchQueries };
+  return { text, grounded, searchQueries };
 }
 
-function buildCloudSearchSummary(sources, searchQueries) {
-  if (sources.length === 0 && searchQueries.length === 0) {
-    return "Web search returned no grounded sources for this claim.";
+// Turns Gemini's listed sources into scoring items (same shape as Google News
+// items). Links prefer the grounded redirect URL for the same domain, which is
+// known to resolve, over a URL Gemini wrote itself.
+function buildSourceItems(parsedSources, grounded) {
+  const groundedByDomain = new Map(grounded.filter((item) => item.domain).map((item) => [item.domain, item]));
+  const seen = new Set();
+  const items = [];
+  for (const source of Array.isArray(parsedSources) ? parsedSources : []) {
+    const domain = normalizeHostname(source?.domain || source?.url || "");
+    if (!domain || seen.has(domain)) continue;
+    seen.add(domain);
+    const publisher = String(source?.publisher || "").trim() || domain;
+    const modelUrl = String(source?.url || "").trim();
+    items.push({
+      title: publisher,
+      url: groundedByDomain.get(domain)?.url || (/^https?:\/\//i.test(modelUrl) ? modelUrl : ""),
+      quote: "",
+      retrieved_at: String(source?.date || "").trim(),
+      source_type: "web",
+      source: publisher,
+      domain,
+      stance: String(source?.stance || "").toLowerCase()
+    });
+    if (items.length >= MAX_CLOUD_SOURCES) break;
   }
+  return items;
+}
+
+const CLOUD_SEARCH_COPY = {
+  en: { empty: "Web search returned no grounded sources for this claim.", queries: "Search queries", sources: "Grounded web sources" },
+  es: { empty: "La búsqueda web no devolvió fuentes para esta afirmación.", queries: "Consultas de búsqueda", sources: "Fuentes web consultadas" },
+  ja: { empty: "ウェブ検索でこの主張の情報源は見つかりませんでした。", queries: "検索クエリ", sources: "参照したウェブ情報源" },
+  zh: { empty: "网页搜索没有为这条主张找到来源。", queries: "搜索词", sources: "参考的网页来源" }
+};
+
+function buildCloudSearchSummary(grounded, searchQueries, outputLanguage) {
+  const copy = CLOUD_SEARCH_COPY[resolveOutputLanguage(outputLanguage)] || CLOUD_SEARCH_COPY.en;
+  if (grounded.length === 0 && searchQueries.length === 0) return copy.empty;
   const lines = [];
-  if (searchQueries.length > 0) lines.push(`Search queries: ${searchQueries.join("; ")}`);
-  lines.push(`Grounded web sources: ${sources.length}`);
-  for (const source of sources.slice(0, 3)) {
+  if (searchQueries.length > 0) lines.push(`${copy.queries}: ${searchQueries.join("; ")}`);
+  lines.push(`${copy.sources}: ${grounded.length}`);
+  for (const source of grounded.slice(0, 3)) {
     lines.push(`· ${source.title || source.url}`);
   }
   return lines.join("\n");
-}
-
-function buildCloudCrossValidationSummary(sources) {
-  return `Web corroboration via Google Search: ${sources.length} source(s). Cross-validation is stronger when multiple independent, reputable domains agree.`;
-}
-
-function buildCloudReproducibilitySummary(mbfcEntry) {
-  const credibility = mbfcEntry
-    ? `Source credibility (MBFC): ${mbfcEntry.hostname}${mbfcEntry.rating ? ` · ${mbfcEntry.rating}` : ""}. `
-    : "No MBFC match for this domain. ";
-  return `${credibility}Reproducibility is stronger when reputable sources repeat the claim over time.`;
 }
 
 export async function runCloudAnalysis(input, signal) {
@@ -166,60 +191,53 @@ export async function runCloudAnalysis(input, signal) {
 
   // Gemini handles the source language natively, so we send the text verbatim
   // (no local detection/translation). `outputLanguage` is still resolved for the
-  // deterministic summary templates; the Gemini-authored fields follow `language`.
+  // rule summary templates; the Gemini-authored fields follow `language`.
   const outputLanguage = await getPreferredOutputLanguage();
   const language = await resolveCloudLanguage();
   const analysisText = getAnalysisText(input);
   const prompt = buildCloudPrompt(input, analysisText, language);
 
-  const { text, sources, searchQueries } = await callGemini(config, prompt, signal);
-
-  const mbfcEntry = await lookupMbfcEntry(input.url || "");
-  const pseudoBundle = { items: sources, query: searchQueries.join("; "), summary: "" };
+  const { text, grounded, searchQueries } = await callGemini(config, prompt, signal);
   const parsed = parseAssessmentJson(text);
-
-  const searchSummary = buildCloudSearchSummary(sources, searchQueries);
-  const base = {
-    news_query: searchQueries.join(", "),
-    news_summary: searchSummary,
-    reproducibility_summary: buildCloudReproducibilitySummary(mbfcEntry),
-    cross_validation_summary: buildCloudCrossValidationSummary(sources),
-    specificity_summary: buildSpecificitySummary(input, outputLanguage)
-  };
-
   if (!parsed) {
     reportError("cloud AI parse fallback", new Error("model output did not parse as JSON"), {
       rawPreview: text.slice(0, 500)
     });
-    const ruleScores = buildDeterministicRuleScores(input, pseudoBundle, mbfcEntry);
-    const confidence = normalizeConfidence(averageRuleScores(ruleScores));
-    const rationale = sanitizeModelText(text) || "Cloud AI returned no parsable output; showing rule-based scores.";
-    return {
-      verdict: normalizeVerdict(verdictFromScore(confidence)),
-      confidence,
-      summary: rationale,
-      rationale,
-      rule_scores: ruleScores,
-      rule_notes: null,
-      evidence: mergeEvidenceLists([], sources, input),
-      ...base
-    };
   }
 
-  let ruleScores = normalizeRuleScores(parsed.rule_scores);
-  if (ruleScores.reproducibility === 0 && ruleScores.cross_validation === 0 && ruleScores.detail_richness === 0) {
-    ruleScores = buildDeterministicRuleScores(input, pseudoBundle, mbfcEntry);
-  }
-  const overallScore = normalizeConfidence(parsed.overall_score ?? parsed.confidence ?? averageRuleScores(ruleScores));
+  // Without parsable output the grounded sources are used unlabeled, which the
+  // rules treat as weak corroboration only (as in the local fallback).
+  const labeled = parsed ? buildSourceItems(parsed.sources, grounded) : [];
+  const [mbfcEntry, items] = await Promise.all([
+    lookupMbfcEntry(input.url || ""),
+    annotateSourceCredibility(labeled.length > 0 ? labeled : grounded)
+  ]);
+  const bundle = { items, query: searchQueries.join("; "), summary: "" };
+
+  const ruleScores = buildDeterministicRuleScores(input, bundle, mbfcEntry, {
+    modelSpecificity: parsed?.specificity
+  });
+  const { verdict, confidence } = assessVerdict({
+    modelVerdict: parsed?.verdict || "",
+    ruleScores,
+    items
+  });
+  const summary = parsed
+    ? sanitizeModelText(parsed.summary || "") || "Cloud AI analysis completed."
+    : sanitizeModelText(text) || "Cloud AI returned no parsable output; showing rule-based scores.";
 
   return {
-    verdict: normalizeVerdict(parsed.verdict || verdictFromScore(overallScore)),
-    confidence: overallScore,
-    summary: sanitizeModelText(parsed.summary || parsed.rationale || "Cloud AI analysis completed."),
-    rationale: sanitizeModelText(parsed.rationale || parsed.summary || "Cloud AI analysis completed."),
+    verdict,
+    confidence,
+    summary,
+    rationale: "",
     rule_scores: ruleScores,
-    rule_notes: normalizeRuleNotes(parsed.rule_notes),
-    evidence: mergeEvidenceLists(normalizeEvidence(parsed.evidence, input), sources, input),
-    ...base
+    rule_notes: parsed ? normalizeRuleNotes(parsed.rule_notes) : null,
+    evidence: mergeEvidenceLists([], items, input),
+    news_query: searchQueries.join(", "),
+    news_summary: buildCloudSearchSummary(grounded, searchQueries, outputLanguage),
+    reproducibility_summary: buildReproducibilitySummary(bundle, mbfcEntry, outputLanguage, { source: "web" }),
+    cross_validation_summary: buildCrossValidationSummary(bundle, outputLanguage, { source: "web" }),
+    specificity_summary: buildSpecificitySummary(input, outputLanguage)
   };
 }

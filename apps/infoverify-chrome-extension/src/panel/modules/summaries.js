@@ -112,8 +112,28 @@ const SPECIFICITY_COPY = {
   }
 };
 
-export function buildReproducibilitySummary(newsBundle, mbfcEntry, outputLanguage = "en") {
-  const copy = REPRODUCIBILITY_COPY[resolveOutputLanguage(outputLanguage)] || REPRODUCIBILITY_COPY.en;
+// Evidence source named in the copy: Google News (local mode) or the Gemini
+// web search (cloud mode). The copy tables are written for Google News and the
+// name is swapped in for web sources.
+const WEB_SOURCE_NAMES = { en: "Web search", es: "Búsqueda web", ja: "ウェブ検索", zh: "网页搜索" };
+
+function withSource(copy, language, source) {
+  if (source !== "web") return copy;
+  const name = WEB_SOURCE_NAMES[language] || WEB_SOURCE_NAMES.en;
+  return Object.fromEntries(Object.entries(copy).map(([key, value]) => [
+    key,
+    // Chinese / Japanese copy spaces the Latin "Google News" off from the
+    // surrounding CJK text; the replacement name needs no such space.
+    typeof value === "string"
+      ? value.replaceAll(language === "zh" || language === "ja" ? /Google News ?/g : /Google News/g, name)
+      : value
+  ]));
+}
+
+// `source`: "news" (Google News, default) or "web" (cloud-mode web search).
+export function buildReproducibilitySummary(newsBundle, mbfcEntry, outputLanguage = "en", { source = "news" } = {}) {
+  const language = resolveOutputLanguage(outputLanguage);
+  const copy = withSource(REPRODUCIBILITY_COPY[language] || REPRODUCIBILITY_COPY.en, language, source);
   const lines = [];
   if (mbfcEntry) {
     lines.push(`${copy.mbfc}: ${mbfcEntry.hostname}${mbfcEntry.factual || mbfcEntry.rating ? ` · ${mbfcEntry.factual || mbfcEntry.rating}` : ""}${mbfcEntry.label ? ` · ${mbfcEntry.label}` : ""}`);
@@ -136,8 +156,9 @@ export function buildReproducibilitySummary(newsBundle, mbfcEntry, outputLanguag
   return lines.join("\n");
 }
 
-export function buildCrossValidationSummary(newsBundle, outputLanguage = "en") {
-  const copy = CROSS_VALIDATION_COPY[resolveOutputLanguage(outputLanguage)] || CROSS_VALIDATION_COPY.en;
+export function buildCrossValidationSummary(newsBundle, outputLanguage = "en", { source = "news" } = {}) {
+  const language = resolveOutputLanguage(outputLanguage);
+  const copy = withSource(CROSS_VALIDATION_COPY[language] || CROSS_VALIDATION_COPY.en, language, source);
   const items = Array.isArray(newsBundle?.items) ? newsBundle.items : [];
   if (items.length === 0) {
     return copy.empty;

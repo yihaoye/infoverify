@@ -49,7 +49,10 @@ export function buildDeterministicRuleScores(input, newsBundle, mbfcEntry, { mod
 export function scoreSpecificity(input) {
   const text = getAnalysisText(input) || String(input?.selectionText || "");
   const normalized = String(text || "");
-  const words = normalized.split(/\s+/).filter(Boolean).length;
+  // CJK text has no spaces between words (cloud mode sends it untranslated),
+  // so count roughly one word per two ideographs / kana / hangul characters.
+  const cjkChars = (normalized.match(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/gu) || []).length;
+  const words = normalized.split(/\s+/).filter(Boolean).length + cjkChars / 2;
   const numbers = (normalized.match(/\b\d+(?:\.\d+)?%?\b/g) || []).length;
   const dates = (normalized.match(/(?:\d{4}[/-]\d{1,2}[/-]\d{1,2})|(?:\d{4}年\d{1,2}月\d{1,2}日)|(?:\d{1,2}\/\d{1,2}\/\d{4})/g) || []).length;
   const hasSpecificMarkers = /(?:%|\$|\b[A-Z]{2,5}(?:\.[A-Z]{1,2})?\b)/.test(normalized);

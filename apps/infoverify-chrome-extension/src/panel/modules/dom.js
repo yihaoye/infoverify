@@ -7,6 +7,7 @@ export const thinkingStepEl = document.getElementById("thinkingStep");
 export const thinkingElapsedEl = document.getElementById("thinkingElapsed");
 export const progressTrackEl = document.getElementById("progressTrack");
 export const progressFillEl = document.getElementById("progressFill");
+export const thinkingHintEl = document.getElementById("thinkingHint");
 export const verdictPillEl = document.getElementById("verdictPill");
 export const confidenceEl = document.getElementById("confidence");
 export const summaryEl = document.getElementById("summary");

@@ -4,6 +4,7 @@ import { state } from "./state.js";
 import {
   elapsedEl,
   thinkingBannerEl,
+  thinkingHintEl,
   verdictPillEl,
   confidenceEl,
   summaryEl,
@@ -43,6 +44,8 @@ export function setLoading(loading, mode = "local") {
     }
     state.loadingStartAt = performance.now();
     startProgress(mode);
+    // Cold-start note applies to the on-device model only.
+    thinkingHintEl.hidden = mode === "cloud";
     thinkingBannerEl.classList.add("active");
     setStatus("");
     elapsedEl.textContent = "";
