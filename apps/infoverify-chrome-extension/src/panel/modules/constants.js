@@ -1,10 +1,8 @@
 // ---------- Shared constants and localized fallback copy ----------
 export const DEBUG_PREFIX = "[InfoVerify]";
 export const minLoadingMs = 700;
-// Prompt API constrained decoding (JSON Schema). Off while we measure whether it
-// is what makes the local analysis step slow; parseAssessmentJson still copes
-// with free-form output.
-export const USE_LOCAL_RESPONSE_CONSTRAINT = false;
+// Prompt API constrained decoding (JSON Schema).
+export const USE_LOCAL_RESPONSE_CONSTRAINT = true;
 // Avoid repeated searches for the same claim during a panel session.
 export const googleNewsCacheTtlMs = 15 * 60 * 1000;
 
