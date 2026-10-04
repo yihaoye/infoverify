@@ -1,9 +1,9 @@
 // ---------- Google News RSS query generation, caching, and parsing ----------
 import { googleNewsCacheTtlMs } from "./constants.js";
 import { reportError } from "./logging.js";
-import { resolveOutputLanguage } from "./language.js";
+import { resolveOutputLanguage, translateText } from "./language.js";
 import { normalizeHostname } from "./mbfc.js";
-import { safeReadText, sanitizeModelText } from "./utils.js";
+import { formatDateOnly, safeReadText, sanitizeModelText } from "./utils.js";
 
 // `session` is the run's local AI session, reused for query generation so the
 // claim is already in its context for the later analysis prompt.
@@ -22,9 +22,12 @@ export async function fetchGoogleNewsBundle(input, signal, outputLanguage = "en"
     };
   }
 
-  const { query, source, claimInContext } = await buildGoogleNewsQuery(input, signal, session);
+  const { query: englishQuery, source, claimInContext } = await buildGoogleNewsQuery(input, signal, session);
   onQueryReady?.({ source, claimInContext });
   const anchorDate = extractAnchorDate(input);
+  const localLanguage = detectClaimLanguage(input);
+  const localQuery = localLanguage ? await buildLocalNewsQuery(input, englishQuery, localLanguage, signal) : "";
+  const query = [englishQuery, localQuery].filter(Boolean).join(" . ");
   if (!query) {
     return {
       query: "",
@@ -43,20 +46,111 @@ export async function fetchGoogleNewsBundle(input, signal, outputLanguage = "en"
     };
   }
 
-  const result = await fetchGoogleNewsItems(query, signal);
-  const topItems = sortGoogleNewsItems(result.items, anchorDate).slice(0, 5);
+  const noResults = { items: [], errorMessage: "" };
+  const [english, local] = await Promise.all([
+    englishQuery ? fetchGoogleNewsItems(englishQuery, signal) : noResults,
+    localQuery ? fetchGoogleNewsItems(localQuery, signal, NEWS_EDITIONS[localLanguage]) : noResults
+  ]);
+  const localItems = await addEnglishTitles(
+    sortGoogleNewsItems(local.items, anchorDate).slice(0, MAX_LOCAL_ITEMS),
+    localLanguage,
+    signal
+  );
+  const englishItems = sortGoogleNewsItems(english.items, anchorDate);
+  const topItems = mergeNewsItems(localItems, englishItems, localItems.length > 0 ? MAX_ITEMS_WITH_LOCAL : MAX_ITEMS);
+  // Report a failure only when nothing came back from either edition.
+  const errorMessage = topItems.length === 0 ? (english.errorMessage || local.errorMessage || "") : "";
   const bundle = {
     query,
     items: topItems,
     anchorDate: anchorDate ? anchorDate.toISOString().slice(0, 10) : "",
-    errorMessage: result.errorMessage || "",
-    summary: summarizeGoogleNewsBundle(query, topItems, result.errorMessage, anchorDate, outputLanguage)
+    errorMessage,
+    summary: summarizeGoogleNewsBundle(query, topItems, errorMessage, anchorDate, outputLanguage)
   };
   // Only cache successful results so transient RSS errors do not become stuck.
   if (!bundle.errorMessage) {
     await setGoogleNewsCachedBundle(cacheKey, bundle);
   }
   return bundle;
+}
+
+// ------------ Local-language Google News edition ------------
+// The English (US) edition is always searched. 
+// A claim written in one of these languages also searches that language's edition,
+// since local stories are often missing from the English one.
+const ENGLISH_EDITION = { hl: "en-US", gl: "US", ceid: "US:en" };
+const NEWS_EDITIONS = {
+  zh: { hl: "zh-CN", gl: "CN", ceid: "CN:zh-Hans" },
+  ja: { hl: "ja", gl: "JP", ceid: "JP:ja" },
+  ko: { hl: "ko", gl: "KR", ceid: "KR:ko" },
+  es: { hl: "es", gl: "ES", ceid: "ES:es" },
+  fr: { hl: "fr", gl: "FR", ceid: "FR:fr" },
+  de: { hl: "de", gl: "DE", ceid: "DE:de" },
+  pt: { hl: "pt-BR", gl: "BR", ceid: "BR:pt-419" },
+  it: { hl: "it", gl: "IT", ceid: "IT:it" },
+  ru: { hl: "ru", gl: "RU", ceid: "RU:ru" }
+};
+const MAX_ITEMS = 5;
+// With a local edition: up to 3 local results, the rest from the english one.
+const MAX_ITEMS_WITH_LOCAL = 6;
+const MAX_LOCAL_ITEMS = 3;
+// Fallback local query when there is no english query to translate.
+const MAX_LOCAL_QUERY_CHARS = 40;
+
+// Language of the original claim: the detector's result when it ran, otherwise
+// a script guess (short selections are not sent to the detector).
+export function detectClaimLanguage(input) {
+  const detected = String(input?.analytsisLanguage || "").toLowerCase().split("-")[0];
+  if (NEWS_EDITIONS[detected]) return detected;
+  if (detected && detected !== "unknown") return "";
+  const text = String(input?.sourceSelectionText || input?.selectionText || "");
+  if (/[\p{Script=Hiragana}\p{Script=Katakana}]/u.test(text)) return "ja";
+  if (/[\p{Script=Hangul}]/u.test(text)) return "ko";
+  if (/[\p{Script=Han}]/u.test(text)) return "zh";
+  return "";
+}
+
+// The english query translated into the claim's language; without an english
+// query (no local model), the start of the original claim itself.
+async function buildLocalNewsQuery(input, englishQuery, language, signal) {
+  if (englishQuery) {
+    const translated = await translateText(englishQuery, "en", language, signal);
+    return translated && translated !== englishQuery ? cleanLocalQuery(translated) : "";
+  }
+  const original = String(input?.sourceSelectionText || input?.selectionText || "");
+  return cleanLocalQuery(original).slice(0, MAX_LOCAL_QUERY_CHARS);
+}
+
+function cleanLocalQuery(value) {
+  return String(value || "")
+    .normalize("NFKC")
+    .replace(/["'`“”‘’《》【】()（）\[\]"]/g, " ")
+    .replace(/[。，、；：！？.,;:!?]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+// Local-edition items keep their original title for display; `title_en` /
+// `quote_en` are what the english-input model reads.
+async function addEnglishTitles(items, language, signal) {
+  return await Promise.all(items.map(async (item) => ({
+    ...item,
+    title_en: await translateText(item.title, language, "en", signal),
+    quote_en: item.quote ? await translateText(item.quote, language, "en", signal) : ""
+  })));
+}
+
+function mergeNewsItems(localItems, englishItems, limit) {
+  const seen = new Set();
+  const merged = [];
+  for (const item of [...localItems, ...englishItems]) {
+    const key = item.url || `${item.domain}|${item.title}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(item);
+    if (merged.length >= limit) break;
+  }
+  return merged;
 }
 
 async function hasGoogleNewsPermission(input) {
@@ -98,12 +192,12 @@ export async function setGoogleNewsCachedBundle(cacheKey, bundle) {
   });
 }
 
-export async function fetchGoogleNewsItems(query, signal) {
+export async function fetchGoogleNewsItems(query, signal, edition = ENGLISH_EDITION) {
   const endpoint = new URL("https://news.google.com/rss/search");
   endpoint.searchParams.set("q", query);
-  endpoint.searchParams.set("hl", "en-US");
-  endpoint.searchParams.set("gl", "US");
-  endpoint.searchParams.set("ceid", "US:en");
+  endpoint.searchParams.set("hl", edition.hl);
+  endpoint.searchParams.set("gl", edition.gl);
+  endpoint.searchParams.set("ceid", edition.ceid);
 
   const resp = await fetch(endpoint.toString(), {
     signal,
@@ -147,8 +241,13 @@ export function normalizeGoogleNewsItem(item) {
   const url = getText("link");
   const sourceNode = item?.querySelector("source");
   const sourceURL = sourceNode?.getAttribute("url") || "";
+  const sourceName = sourceNode?.textContent?.trim() || "";
+  // Google News titles and with " - Publisher" even when <source>  names it too;
+  // drop that suffix so the publisher is not repeated in the title.
   const titleParts = title.split(" - ");
-  const source = sourceNode?.textContent?.trim() || (titleParts.length > 1 ? titleParts.pop().trim() : "Google News");
+  const suffix = titleParts.length > 1 ? titleParts[titleParts.length - 1].trim() : "";
+  if (suffix && (!sourceName || suffix.toLowerCase() === sourceName.toLowerCase())) titleParts.pop();
+  const source = sourceName || suffix || "Google News";
   const quote = description ? new DOMParser().parseFromString(description, "text/html").body?.textContent?.trim() || "" : "";
   return {
     title: titleParts.join(" - ").trim() || title || url || "Google News hit",
@@ -207,9 +306,8 @@ export function summarizeGoogleNewsBundle(query, items, errorMessage, anchorDate
   }
 
   const lines = items.slice(0, 3).map((item) => {
-    const date = item.retrieved_at ? new Date(item.retrieved_at).toISOString().slice(0, 10) : "unknown-date";
     const source = item.source ? ` · ${item.source}` : "";
-    return `${date}${source} · ${item.title}`;
+    return `${formatDateOnly(item.retrieved_at)}${source} · ${item.title}`;
   });
   const queryLine = query ? `${copy.query}: ${query}\n` : "";
   const anchorLine = anchorDate

@@ -1,5 +1,5 @@
 // ---------- Cloud AI (BYOK) orchestration: Google Gemini + Google Search grounding ----------
-import { GEMINI_ORIGIN, GEMINI_API_BASE, GEMINI_DEFAULT_MODEL, SUPPORTED_OUTPUT_LANGUAGES } from "./constants.js";
+import { GEMINI_ORIGIN, GEMINI_API_BASE, GEMINI_DEFAULT_MODEL } from "./constants.js";
 import { reportError } from "./logging.js";
 import { getAnalysisText, sanitizeModelText, safeReadText } from "./utils.js";
 import { getPreferredOutputLanguage, getLanguageLabel, resolveOutputLanguage } from "./language.js";
@@ -26,30 +26,21 @@ export async function getCloudConfig() {
   };
 }
 
-// Resolves the language instruction for Gemini. When the user picked a specific
-// output language we name it; when the preference is "auto" we hand detection to
-// Gemini itself (no local language detection) and ask it to reply in the claim's
-// own language.
-async function resolveCloudLanguage() {
-  const { outputLanguage = "auto" } = await chrome.storage.sync.get({ outputLanguage: "auto" });
-  const pref = String(outputLanguage || "auto").toLowerCase();
-  if (SUPPORTED_OUTPUT_LANGUAGES.has(pref)) {
-    return { instruction: `Write summary and rule_notes in ${getLanguageLabel(pref)}.` };
-  }
-  return {
-    instruction: "Detect the primary language of the claim text below and write summary and rule_notes in that same language."
-  };
+// Gemini writes in the same output language as the rule summaries: the one
+// chosen in Settings, or the browser language for "auto" (as in local mode).
+function cloudLanguageInstruction(outputLanguage) {
+  return `Write summary and rule_notes in ${getLanguageLabel(outputLanguage)}.`;
 }
 
 // Same contract as the local prompt (stances → specificity → verdict →
 // summary), except Gemini finds its own sources with Google Search, so it lists
 // them with a stance each instead of labeling a numbered list. Scores and the
 // final verdict are computed by the shared rules, not taken from Gemini.
-function buildCloudPrompt(input, analysisText, language) {
+function buildCloudPrompt(input, analysisText, languageInstruction) {
   return [
     "You are an information verification assistant with web search.",
     "Use Google Search to find independent, reputable sources that report on the claim before answering. Do not use the page under review as a source.",
-    language.instruction,
+    languageInstruction,
     "Tasks:",
     `1) sources: up to ${MAX_CLOUD_SOURCES} distinct publishers you actually found. For each: publisher name, the publisher's website domain (e.g. reuters.com), the article URL, its publication date (YYYY-MM-DD, or "" if unknown), and stance. "support" = it reports the same claim as true; "contradict" = it denies, debunks, or reports conflicting facts; "irrelevant" = a different event or topic. Sharing keywords is not support.`,
     "2) specificity: 0 to 1, how concrete and falsifiable the claim is (who/what/when/where, precise numbers that actually back the conclusion, little vagueness).",
@@ -189,13 +180,11 @@ export async function runCloudAnalysis(input, signal) {
     throw new Error("Cloud AI needs permission to connect to the Gemini API. Select Cloud AI again in Settings to grant it.");
   }
 
-  // Gemini handles the source language natively, so we send the text verbatim
-  // (no local detection/translation). `outputLanguage` is still resolved for the
-  // rule summary templates; the Gemini-authored fields follow `language`.
+  // Gemini handles the source language natively, so the text is sent verbatim
+  // (no local detection/translation).
   const outputLanguage = await getPreferredOutputLanguage();
-  const language = await resolveCloudLanguage();
   const analysisText = getAnalysisText(input);
-  const prompt = buildCloudPrompt(input, analysisText, language);
+  const prompt = buildCloudPrompt(input, analysisText, cloudLanguageInstruction(outputLanguage));
 
   const { text, grounded, searchQueries } = await callGemini(config, prompt, signal);
   const parsed = parseAssessmentJson(text);

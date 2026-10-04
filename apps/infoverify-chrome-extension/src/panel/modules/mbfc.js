@@ -1,5 +1,6 @@
 // ---------- MBFC dataset lookup and hostname normalization ----------
 import { state } from "./state.js";
+import { MBFC_FACTUAL_WEIGHTS } from "./weights.js";
 
 export function normalizeHostname(url) {
   try {
@@ -44,18 +45,6 @@ export function normalizeMbfcEntry(entry, hostname) {
     notes: String(entry.notes || entry.summary || "").trim()
   };
 }
-
-// Reproducibility points for an MBFC factual-reporting rating. A "Mixed" or
-// worse rating must not score better than an unrated domain, so only
-// mostly-factual and above add points and low ratings subtract.
-const MBFC_FACTUAL_WEIGHTS = {
-  veryhigh: 0.3,
-  high: 0.22,
-  mostlyfactual: 0.12,
-  mixed: 0,
-  low: -0.12,
-  verylow: -0.2
-};
 
 export function mbfcFactualWeight(entry) {
   const key = String(entry?.factual || entry?.rating || "").toLowerCase().replace(/[^a-z]/g, "");

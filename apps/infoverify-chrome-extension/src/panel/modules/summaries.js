@@ -1,6 +1,6 @@
 // ---------- Localized summary builders for the three scoring principles ----------
 import { resolveOutputLanguage } from "./language.js";
-import { countDistinctValues, formatDateOnly } from "./utils.js";
+import { countDistinctValues, formatDateOnly, dateRange } from "./utils.js";
 import { stanceStats } from "./stance.js";
 
 const REPRODUCIBILITY_COPY = {
@@ -144,8 +144,7 @@ export function buildReproducibilitySummary(newsBundle, mbfcEntry, outputLanguag
   // Only publishers that could corroborate the claim count toward its timeline.
   const { corroborating } = stanceStats(newsBundle?.items);
   if (corroborating.length) {
-    const firstDate = corroborating[corroborating.length - 1]?.retrieved_at || "";
-    const lastDate = corroborating[0]?.retrieved_at || "";
+    const { first: firstDate, last: lastDate } = dateRange(corroborating);
     const domains = countDistinctValues(corroborating.map((item) => item.domain).filter(Boolean));
     lines.push(`${copy.timeline}: ${copy.first} ${formatDateOnly(firstDate)} · ${copy.recent} ${formatDateOnly(lastDate)} · ${copy.distinct} ${domains}`);
   } else {
@@ -165,7 +164,8 @@ export function buildCrossValidationSummary(newsBundle, outputLanguage = "en", {
   }
 
   const domains = countDistinctValues(items.map((item) => item.domain).filter(Boolean));
-  const timeline = `${formatDateOnly(items[items.length - 1]?.retrieved_at)} → ${formatDateOnly(items[0]?.retrieved_at)}`;
+  const { first, last } = dateRange(items);
+  const timeline = `${formatDateOnly(first)} → ${formatDateOnly(last)}`;
   return [
     `${copy.prefix}: ${items.length} ${copy.hitsLabel}, ${domains} ${copy.domainsLabel}`,
     copy.stances(stanceStats(items)),

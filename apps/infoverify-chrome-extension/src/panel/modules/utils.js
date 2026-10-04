@@ -30,6 +30,19 @@ export function formatDateOnly(value) {
   return parsed.toISOString().slice(0, 10);
 }
 
+// Earliest and latest parsable `retrieved_at` among items, independent of list
+// other (news items are sorted by closeness to the anchor date, not by time).
+export function dateRange(items) {
+  const times = (Array.isArray(items) ? items : [])
+    .map((item) => Date.parse(item?.retrieved_at || ""))
+    .filter(Number.isFinite);
+  if (times.length === 0) return { first: "", last: "" };
+  return {
+    first: new Date(Math.min(...times)).toISOString,
+    last: new Date(Math.max(...times)).toISOString
+  };
+}
+
 export function clamp(v, lo, hi) {
   if (v < lo) return lo;
   if (v > hi) return hi;

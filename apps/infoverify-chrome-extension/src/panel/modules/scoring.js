@@ -3,6 +3,13 @@ import { clamp, countDistinctValues, getAnalysisText } from "./utils.js";
 import { fallbackLanguageText } from "./language.js";
 import { normalizeVerdict, averageRuleScores } from "./normalize.js";
 import { mbfcFactualWeight } from "./mbfc.js";
+import {
+  SPECIFICITY_WEIGHTS as SW,
+  CROSS_VALIDATION_WEIGHTS as CW,
+  REPRODUCIBILITY_WEIGHTS as RW,
+  VERDICT_THRESHOLDS as VT,
+  capped
+} from "./weights.js";
 import { mergeEvidenceLists, buildFallbackEvidence } from "./evidence.js";
 import { stanceStats, distinctDomains, distinctDates } from "./stance.js";
 import {
@@ -56,7 +63,11 @@ export function scoreSpecificity(input) {
   const numbers = (normalized.match(/\b\d+(?:\.\d+)?%?\b/g) || []).length;
   const dates = (normalized.match(/(?:\d{4}[/-]\d{1,2}[/-]\d{1,2})|(?:\d{4}年\d{1,2}月\d{1,2}日)|(?:\d{1,2}\/\d{1,2}\/\d{4})/g) || []).length;
   const hasSpecificMarkers = /(?:%|\$|\b[A-Z]{2,5}(?:\.[A-Z]{1,2})?\b)/.test(normalized);
-  const score = 0.16 + Math.min(0.34, words / 220) + Math.min(0.2, numbers * 0.05) + Math.min(0.14, dates * 0.06) + (hasSpecificMarkers ? 0.08 : 0);
+  const score = SW.base + 
+  Match.min(SW.wordsCap, words / SW.wordsDivisor) +
+  capped(numbers, SW.numberStep, SW.numberCap) +
+  capped(dates, SW.dateStep, SW.dateCap) +
+  (hasSpecificMarkers ? SW.markerBonus : 0);
   return clamp(score, 0, 1);
 }
 
@@ -66,13 +77,13 @@ export function scoreSpecificity(input) {
 // strongly corroborated.
 export function scoreCrossValidation(newsBundle) {
   const stats = stanceStats(newsBundle?.items);
-  if (stats.support + stats.contradict + stats.unknown === 0) return 0.12;
+  if (stats.support + stats.contradict + stats.unknown === 0) return CW.noEvidence;
 
-  const score = 0.2 +
-    Math.min(0.45, stats.supportDomains * 0.15) +
-    Math.min(0.15, stats.unknownDomains * 0.05) +
-    Math.min(0.15, Math.max(0, distinctDates(stats.corroborating) - 1) * 0.05) -
-    Math.min(0.4, stats.contradictDomains * 0.2);
+  const score = CW.base +
+    capped(stats.supportDomains, CW.supportStep, CW.supportCap) +
+    capped(stats.unknownDomains, CW.unknownStep, CW.unknownCap) +
+    capped(Math.max(0, distinctDates(stats.corroborating) - 1), CW.dateStep, CW.dateCap) -
+    capped(stats.contradictDomains, CW.contradictStep, CW.contradictCap);
   return clamp(score, 0, 1);
 }
 
@@ -83,14 +94,14 @@ export function scoreReproducibility(newsBundle, mbfcEntry) {
   const { corroborating } = stanceStats(newsBundle?.items);
   const domains = distinctDomains(corroborating);
   const credibleDomains = countDistinctValues(
-    corroborating.filter((item) => Number(item.source_credibility) >= 0.12).map((item) => item.domain).filter(Boolean)
+    corroborating.filter((item) => Number(item.source_credibility) >= RW.credibleMinWeight).map((item) => item.domain).filter(Boolean)
   );
-  const score = 0.2 +
+  const score = RW.base +
     (mbfcEntry ? mbfcFactualWeight(mbfcEntry) : 0) +
-    Math.min(0.12, corroborating.length * 0.03) +
-    Math.min(0.12, Math.max(0, domains - 1) * 0.06) +
-    Math.min(0.14, Math.max(0, distinctDates(corroborating) - 1) * 0.07) +
-    Math.min(0.12, credibleDomains * 0.04);
+    capped(corroborating.length, RW.itemStep, RW.itemCap) +
+    capped(Math.max(0, domains - 1), RW.domainStep, RW.domainCap) +
+    capped(Math.max(0, distinctDates(corroborating) - 1), RW.dateStep, RW.dateCap) +
+    capped(credibleDomains, RW.credibleStep, RW.credibleCap);
   return clamp(score, 0, 1);
 }
 
@@ -111,12 +122,12 @@ export function assessVerdict({ modelVerdict, ruleScores, items }) {
   let verdict = "unclear";
   if (stats.contradictDomains > stats.supportDomains) {
     verdict = "contradicted";
-  } else if (model === "contradicted" && credibility < 0.5) {
+  } else if (model === "contradicted" && credibility < VT.modelContradictedBelow) {
     verdict = "contradicted";
-  } else if (model !== "contradicted" && stats.supportDomains > 0 && credibility >= 0.55) {
+  } else if (model !== "contradicted" && stats.supportDomains > 0 && credibility >= VT.supportedMin) {
     verdict = "supported";
   }
 
-  const confidence = verdict === "contradicted" ? Math.min(credibility, 0.35) : credibility;
+  const confidence = verdict === "contradicted" ? Math.min(credibility, VT.contradictedCap) : credibility;
   return { verdict, confidence: clamp(confidence, 0, 1) };
 }
