@@ -124,7 +124,7 @@ async function buildLocalNewsQuery(input, englishQuery, language, signal) {
 function cleanLocalQuery(value) {
   return String(value || "")
     .normalize("NFKC")
-    .replace(/["'`“”‘’「」《》【】()（）\[\]"]/g, " ")
+    .replace(/["'`“”‘’「」『』《》【】()（）\[\]]/g, " ")
     .replace(/[。，、；：！？.,;:!?]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
