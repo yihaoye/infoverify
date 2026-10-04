@@ -1,7 +1,7 @@
 // ------ Rule-scoring weights and verdict thresholds -------
 // Every rule score is 0-1: a base plus capped bonuses, each computed as
 // min(cap, count × step). The values are hand-tuned against a handful of
-// claims; change them here and run 'node -test" (repo root) to see which expec
+// claims; change them here and run `node --test` (repo root) to see which expected
 // verdicts move.
 
 export const SPECIFICITY_WEIGHTS = {

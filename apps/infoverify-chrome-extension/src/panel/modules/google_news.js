@@ -27,7 +27,7 @@ export async function fetchGoogleNewsBundle(input, signal, outputLanguage = "en"
   const anchorDate = extractAnchorDate(input);
   const localLanguage = detectClaimLanguage(input);
   const localQuery = localLanguage ? await buildLocalNewsQuery(input, englishQuery, localLanguage, signal) : "";
-  const query = [englishQuery, localQuery].filter(Boolean).join(" . ");
+  const query = [englishQuery, localQuery].filter(Boolean).join(" · ");
   if (!query) {
     return {
       query: "",
@@ -100,7 +100,7 @@ const MAX_LOCAL_QUERY_CHARS = 40;
 // Language of the original claim: the detector's result when it ran, otherwise
 // a script guess (short selections are not sent to the detector).
 export function detectClaimLanguage(input) {
-  const detected = String(input?.analytsisLanguage || "").toLowerCase().split("-")[0];
+  const detected = String(input?.analysisLanguage || "").toLowerCase().split("-")[0];
   if (NEWS_EDITIONS[detected]) return detected;
   if (detected && detected !== "unknown") return "";
   const text = String(input?.sourceSelectionText || input?.selectionText || "");
@@ -124,7 +124,7 @@ async function buildLocalNewsQuery(input, englishQuery, language, signal) {
 function cleanLocalQuery(value) {
   return String(value || "")
     .normalize("NFKC")
-    .replace(/["'`“”‘’《》【】()（）\[\]"]/g, " ")
+    .replace(/["'`“”‘’「」《》【】()（）\[\]"]/g, " ")
     .replace(/[。，、；：！？.,;:!?]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();

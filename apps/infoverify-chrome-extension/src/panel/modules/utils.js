@@ -38,8 +38,8 @@ export function dateRange(items) {
     .filter(Number.isFinite);
   if (times.length === 0) return { first: "", last: "" };
   return {
-    first: new Date(Math.min(...times)).toISOString,
-    last: new Date(Math.max(...times)).toISOString
+    first: new Date(Math.min(...times)).toISOString(),
+    last: new Date(Math.max(...times)).toISOString()
   };
 }
 

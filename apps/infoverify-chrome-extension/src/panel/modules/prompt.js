@@ -39,7 +39,7 @@ export function buildLocalEvidencePrompt(input, newsBundle, mbfcEntry, { claimIn
         const source = item.source || item.source_type || "Google News";
         // Local-edition results carry an English translation for the model.
         const title = item.title_en || item.title || item.url || "Google News match";
-        const quote = item.title_en || item.quote || "";
+        const quote = item.quote_en || item.quote || "";
         return `${index + 1}. ${formatDateOnly(item.retrieved_at)} · ${source} · ${title}${quote ? `\n   ${quote}` : ""}`;
       }).join("\n")
     : "(no results)";

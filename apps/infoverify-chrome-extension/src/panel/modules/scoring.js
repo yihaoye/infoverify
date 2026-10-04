@@ -64,7 +64,7 @@ export function scoreSpecificity(input) {
   const dates = (normalized.match(/(?:\d{4}[/-]\d{1,2}[/-]\d{1,2})|(?:\d{4}年\d{1,2}月\d{1,2}日)|(?:\d{1,2}\/\d{1,2}\/\d{4})/g) || []).length;
   const hasSpecificMarkers = /(?:%|\$|\b[A-Z]{2,5}(?:\.[A-Z]{1,2})?\b)/.test(normalized);
   const score = SW.base + 
-  Match.min(SW.wordsCap, words / SW.wordsDivisor) +
+  Math.min(SW.wordsCap, words / SW.wordsDivisor) +
   capped(numbers, SW.numberStep, SW.numberCap) +
   capped(dates, SW.dateStep, SW.dateCap) +
   (hasSpecificMarkers ? SW.markerBonus : 0);
